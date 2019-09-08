@@ -20,6 +20,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
+import logging
 
 
 class AbstractSplitRule(ABC):
@@ -246,61 +247,71 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
 
                 if np.any(non_null_indexer_1_2):
                     # get indexer for child node data assignments
-                    ret = self._get_children_indexer_and_state(data_values_left=col_data_1[non_null_indexer_1_2],
+                    rets = self._get_children_indexer_and_state(data_values_left=col_data_1[non_null_indexer_1_2],
                                                                data_values_right=col_data_2[non_null_indexer_1_2])
 
+                    if not isinstance(rets, typing.List):
+                        logging.getLogger(__package__).warning(f"Returning only one split for a split rule "
+                                                               f"is deprecated"
+                                                               f"but {self.__class__.mro()[0]} does."
+                                                               f"if you just want to return a single split, "
+                                                               f"just return [(config, [nodes...])]. Fixing "
+                                                               f"that for you"
+                                                               f"Code (23180198123)")
+                        rets = [rets]
                     curr_child_indices = []
 
                     # a valid split occured?
-                    if ret is not None:
-                        null_indexer_1_2 = ~non_null_indexer_1_2
-                        non_null_indices = data_indices[non_null_indexer_1_2]
-                        has_null_entries = np.any(null_indexer_1_2)
-                        state, assignments = ret
+                    for ret in rets:
+                        if ret is not None:
+                            null_indexer_1_2 = ~non_null_indexer_1_2
+                            non_null_indices = data_indices[non_null_indexer_1_2]
+                            has_null_entries = np.any(null_indexer_1_2)
+                            state, assignments = ret
 
-                        assert isinstance(state, typing.Dict),        "State mus be a dict (Code: 67543256)"
-                        assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
-                                                                      "a tuple or None (Code: 5869378963547)"
-                        assert len(assignments) >= 2,                 "A split has to generate at least " \
-                                                                      "two child nodes(" \
-                                                                      "Code: 45698435673)"
+                            assert isinstance(state, typing.Dict),        "State mus be a dict (Code: 67543256)"
+                            assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
+                                                                          "a tuple or None (Code: 5869378963547)"
+                            assert len(assignments) >= 2,                 "A split has to generate at least " \
+                                                                          "two child nodes(" \
+                                                                          "Code: 45698435673)"
 
-                        # collect data indices for each node
-                        has_empty_child = False
-                        for child_assignment in assignments:
-                            assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(np.bool), \
-                                "Assignments have to be a numpy array of type bool (Code: 39820934)"
+                            # collect data indices for each node
+                            has_empty_child = False
+                            for child_assignment in assignments:
+                                assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(np.bool), \
+                                    "Assignments have to be a numpy array of type bool (Code: 39820934)"
 
-                            if not np.any(child_assignment):
-                                has_empty_child = True
-                                break
+                                if not np.any(child_assignment):
+                                    has_empty_child = True
+                                    break
 
-                            curr_child_indices.append(non_null_indices[child_assignment])
+                                curr_child_indices.append(non_null_indices[child_assignment])
 
-                            if has_null_entries:
-                                curr_child_indices[-1] = np.append(curr_child_indices[-1],
-                                                                   data_indices[null_indexer_1_2])
+                                if has_null_entries:
+                                    curr_child_indices[-1] = np.append(curr_child_indices[-1],
+                                                                       data_indices[null_indexer_1_2])
 
-                        # check if we have an empty child
-                        # atm we do not want to accept that -> ignore
-                        if not has_empty_child:
-                            child_nodes = [node.create_child_node(assigned_data_indices=indices)
-                                           for indices in curr_child_indices]
+                            # check if we have an empty child
+                            # atm we do not want to accept that -> ignore
+                            if not has_empty_child:
+                                child_nodes = [node.create_child_node(assigned_data_indices=indices)
+                                               for indices in curr_child_indices]
 
-                            state['split_attribute_indices'] = (attr_idx1, attr_idx2)
-                            self.set_child_nodes(child_nodes=child_nodes)
-                            self.set_state(state)
-                            score = self.get_information_measure()(parent_node=self.get_node())
+                                state['split_attribute_indices'] = (attr_idx1, attr_idx2)
+                                self.set_child_nodes(child_nodes=child_nodes)
+                                self.set_state(state)
+                                score = self.get_information_measure()(parent_node=self.get_node())
 
-                            if score > best_score:
-                                best_score = score
-                                best_children = self.get_child_nodes()
-                                best_state = state
+                                if score > best_score:
+                                    best_score = score
+                                    best_children = self.get_child_nodes()
+                                    best_state = state
 
-            # check if we scored something at all
-            if best_score > -float('inf'):
-                self.set_state(best_state)
-                return best_score, best_children
+                # check if we scored something at all
+                if best_score > -float('inf'):
+                    self.set_state(best_state)
+                    return best_score, best_children
 
         # otherwise we just don't have something to show
         return None
@@ -370,52 +381,66 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                 non_null_values = col_data[non_null_indexer]
 
                 # get indexer for child node data assignments
-                ret = self._get_children_indexer_and_state(data_values=non_null_values)
+                rets = self._get_children_indexer_and_state(data_values=non_null_values)
 
                 curr_child_indices = []
 
                 # a valid split occured?
-                if ret is not None:
-                    non_null_indices = data_indices[non_null_indexer]
-                    has_null_entries = np.any(null_indexer)
-                    state, assignments = ret
+                if rets is not None:
+                    # we simulate old behaviour if we get no list of stuffies back
+                    # = when only one result is returned
+                    if not isinstance(rets, typing.List):
+                        logging.getLogger(__package__).warning(
+                            f"Split \"{self.__class__.__mro__[0].__name__}\" rule did not return a list of "
+                            "dict, split-pairs"
+                            "we simulated that for now. If you only "
+                            "want to return exactly"
+                            "one split just put brackets around it, "
+                            "e.g.: \"[]\" (Code: 3249823094823)")
+                        rets = [rets]
+                    for ret in rets:
 
-                    assert isinstance(state, typing.Dict),        "State mus be a dict (Code: 32942390)"
-                    assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
-                                                                  "a tuple or None (Code: 00756435345)"
-                    assert len(assignments) >= 2,                 "A split has to generate at least two child nodes (" \
-                                                                  "Code: 248234)"
 
-                    # collect data indices for each node
-                    has_empty_child = False
-                    for child_assignment in assignments:
-                        assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(np.bool), \
-                            "Assignments have to be a numpy array of type bool (Code: 39820934)"
+                        non_null_indices = data_indices[non_null_indexer]
+                        has_null_entries = np.any(null_indexer)
+                        state, assignments = ret
 
-                        if not np.any(child_assignment):
-                            has_empty_child = True
-                            break
+                        assert isinstance(state, typing.Dict),        "State mus be a dict (Code: 32942390)"
+                        assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
+                                                                      "a tuple or None (Code: 00756435345)"
+                        assert len(assignments) >= 2,                 "A split has to generate at least two child nodes (" \
+                                                                      "Code: 248234)"
 
-                        curr_child_indices.append(non_null_indices[child_assignment])
+                        # collect data indices for each node
+                        has_empty_child = False
+                        for child_assignment in assignments:
+                            assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(np.bool), \
+                                "Assignments have to be a numpy array of type bool (Code: 39820934)"
 
-                        if has_null_entries:
-                            curr_child_indices[-1] = np.append(curr_child_indices[-1], data_indices[null_indexer])
+                            if not np.any(child_assignment):
+                                has_empty_child = True
+                                break
 
-                    # check if we have an empty child
-                    # atm we do not want to accept that -> ignore
-                    if not has_empty_child:
-                        child_nodes = [node.create_child_node(assigned_data_indices=indices)
-                                       for indices in curr_child_indices]
+                            curr_child_indices.append(non_null_indices[child_assignment])
 
-                        state['split_attribute_indices'] = [attr_idx]
-                        self.set_child_nodes(child_nodes=child_nodes)
-                        self.set_state(state)
-                        score = self.get_information_measure()(parent_node=self.get_node())
+                            if has_null_entries:
+                                curr_child_indices[-1] = np.append(curr_child_indices[-1], data_indices[null_indexer])
 
-                        if score > best_score:
-                            best_score = score
-                            best_children = self.get_child_nodes()
-                            best_state = state
+                        # check if we have an empty child
+                        # atm we do not want to accept that -> ignore
+                        if not has_empty_child:
+                            child_nodes = [node.create_child_node(assigned_data_indices=indices)
+                                           for indices in curr_child_indices]
+
+                            state['split_attribute_indices'] = [attr_idx]
+                            self.set_child_nodes(child_nodes=child_nodes)
+                            self.set_state(state)
+                            score = self.get_information_measure()(parent_node=self.get_node())
+
+                            if score > best_score:
+                                best_score = score
+                                best_children = self.get_child_nodes()
+                                best_state = state
 
         # check if we scored something at all
         if best_score > -float('inf'):
@@ -426,8 +451,8 @@ class OneAttributeSplitMixin(AbstractSplitRule):
         return None
 
     @abstractmethod
-    def _get_children_indexer_and_state(self, data_values: np.ndarray) -> Optional[typing.Tuple[typing.Dict,
-                                                                                                typing.Tuple[np.ndarray]]]:
+    def _get_children_indexer_and_state(self, data_values: np.ndarray) -> Optional[typing.List[typing.Tuple[typing.Dict,
+                                                                                                typing.Tuple[np.ndarray]]]]:
         """
         Returns for each child no
         :param data_values:
@@ -518,7 +543,7 @@ class NumericalSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
         right = ~left
         state = {'split_value': split_member}
 
-        return state, (left, right)
+        return [(state, (left, right))]
 
 
 class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
@@ -597,7 +622,7 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
         state = {'median': median_val, 'stdev': stdev}
 
-        return state, (inside_median, ~inside_median)
+        return [(state, (inside_median, ~inside_median))]
 
 
 class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
@@ -660,14 +685,11 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             else:
                 return [self.get_child_nodes()[1]]
 
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray) -> Optional[
-        typing.Tuple[typing.Dict,
-                     typing.Tuple[np.ndarray]]]:
-
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
         left_vals = data_values_left < data_values_right
         state = {}
 
-        return state, (left_vals, ~left_vals)
+        return [(state, (left_vals, ~left_vals))]
 
 
 class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
@@ -730,14 +752,11 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             else:
                 return [self.get_child_nodes()[1]]
 
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray) -> Optional[
-        typing.Tuple[typing.Dict,
-                     typing.Tuple[np.ndarray]]]:
-
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
         left_vals = data_values_left < 0.5 * data_values_right
         state = {}
 
-        return state, (left_vals, ~left_vals)
+        return [(state, (left_vals, ~left_vals))]
 
 
 class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
@@ -798,9 +817,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         else:
             return [self.get_child_nodes()[lookup[val]]]
 
-    def _get_children_indexer_and_state(self, data_values: np.ndarray) -> Optional[typing.Tuple[typing.Dict,
-                                                                                                typing.Tuple[
-                                                                                                    np.ndarray]]]:
+    def _get_children_indexer_and_state(self, data_values: np.ndarray):
 
         distinct_node_labels = np.unique(data_values)
         node_indexer = []
@@ -812,8 +829,8 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
                 node_indexer.append(data_values == lbl)
                 label_to_node_idx_lookup[lbl] = i
 
-            return {'label_to_node_idx_lookup': label_to_node_idx_lookup},\
-                   tuple(node_indexer)
+            return [({'label_to_node_idx_lookup': label_to_node_idx_lookup},\
+                   tuple(node_indexer))]
 
         return None
 
