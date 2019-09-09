@@ -17,10 +17,11 @@
 
 import typing
 from typing import Optional
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 import numpy as np
 import pandas as pd
 import logging
+from collections import Counter
 
 
 class AbstractSplitRule(ABC):
@@ -28,8 +29,9 @@ class AbstractSplitRule(ABC):
     Represents one specific way
     a node may be split into child nodes
     """
-   # from .node import Node
-   # from .hdtree import AbstractHDTree
+
+    # from .node import Node
+    # from .hdtree import AbstractHDTree
 
     def __str__(self):
         return self.user_readable_description()
@@ -193,7 +195,6 @@ class AbstractNumericalSplit(AbstractSplitRule):
         return candidates
 
 
-
 class AbstractCategoricalSplit(AbstractSplitRule):
     """
     Represents a split over numerical attributes
@@ -217,6 +218,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
     This is just a helper that deals with extracting the necessary data (including none indices)
     over exactly two attributes to easen up some repeated works
     """
+
     def _get_best_split(self):
         node = self.get_node()
         node_data = node.get_data()
@@ -248,7 +250,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
                 if np.any(non_null_indexer_1_2):
                     # get indexer for child node data assignments
                     rets = self._get_children_indexer_and_state(data_values_left=col_data_1[non_null_indexer_1_2],
-                                                               data_values_right=col_data_2[non_null_indexer_1_2])
+                                                                data_values_right=col_data_2[non_null_indexer_1_2])
 
                     if not isinstance(rets, typing.List):
                         logging.getLogger(__package__).warning(f"Returning only one split for a split rule "
@@ -259,27 +261,28 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
                                                                f"that for you"
                                                                f"Code (23180198123)")
                         rets = [rets]
-                    curr_child_indices = []
 
                     # a valid split occured?
                     for ret in rets:
+                        curr_child_indices = []
                         if ret is not None:
                             null_indexer_1_2 = ~non_null_indexer_1_2
                             non_null_indices = data_indices[non_null_indexer_1_2]
                             has_null_entries = np.any(null_indexer_1_2)
                             state, assignments = ret
 
-                            assert isinstance(state, typing.Dict),        "State mus be a dict (Code: 67543256)"
+                            assert isinstance(state, typing.Dict), "State mus be a dict (Code: 67543256)"
                             assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
                                                                           "a tuple or None (Code: 5869378963547)"
-                            assert len(assignments) >= 2,                 "A split has to generate at least " \
-                                                                          "two child nodes(" \
-                                                                          "Code: 45698435673)"
+                            assert len(assignments) >= 2, "A split has to generate at least " \
+                                                          "two child nodes(" \
+                                                          "Code: 45698435673)"
 
                             # collect data indices for each node
                             has_empty_child = False
                             for child_assignment in assignments:
-                                assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(np.bool), \
+                                assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(
+                                    np.bool), \
                                     "Assignments have to be a numpy array of type bool (Code: 39820934)"
 
                                 if not np.any(child_assignment):
@@ -317,8 +320,9 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
         return None
 
     @abstractmethod
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray) -> Optional[typing.Tuple[typing.Dict,
-                                                                                                typing.Tuple[np.ndarray]]]:
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray) -> Optional[
+        typing.Tuple[typing.Dict,
+                     typing.Tuple[np.ndarray]]]:
         """
         Returns for each child no
         :param data_values_left:
@@ -349,6 +353,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
         indices = self.get_split_attribute_indices()
         return (self.get_tree().get_attribute_names()[indices[0]],
                 self.get_tree().get_attribute_names()[indices[1]])
+
 
 class OneAttributeSplitMixin(AbstractSplitRule):
     """
@@ -383,8 +388,6 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                 # get indexer for child node data assignments
                 rets = self._get_children_indexer_and_state(data_values=non_null_values)
 
-                curr_child_indices = []
-
                 # a valid split occured?
                 if rets is not None:
                     # we simulate old behaviour if we get no list of stuffies back
@@ -399,22 +402,23 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                             "e.g.: \"[]\" (Code: 3249823094823)")
                         rets = [rets]
                     for ret in rets:
-
+                        curr_child_indices = []
 
                         non_null_indices = data_indices[non_null_indexer]
                         has_null_entries = np.any(null_indexer)
                         state, assignments = ret
 
-                        assert isinstance(state, typing.Dict),        "State mus be a dict (Code: 32942390)"
+                        assert isinstance(state, typing.Dict), "State mus be a dict (Code: 32942390)"
                         assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
                                                                       "a tuple or None (Code: 00756435345)"
-                        assert len(assignments) >= 2,                 "A split has to generate at least two child nodes (" \
-                                                                      "Code: 248234)"
+                        assert len(assignments) >= 2, "A split has to generate at least two child nodes (" \
+                                                      "Code: 248234)"
 
                         # collect data indices for each node
                         has_empty_child = False
                         for child_assignment in assignments:
-                            assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(np.bool), \
+                            assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(
+                                np.bool), \
                                 "Assignments have to be a numpy array of type bool (Code: 39820934)"
 
                             if not np.any(child_assignment):
@@ -452,7 +456,8 @@ class OneAttributeSplitMixin(AbstractSplitRule):
 
     @abstractmethod
     def _get_children_indexer_and_state(self, data_values: np.ndarray) -> Optional[typing.List[typing.Tuple[typing.Dict,
-                                                                                                typing.Tuple[np.ndarray]]]]:
+                                                                                                            typing.Tuple[
+                                                                                                                np.ndarray]]]]:
         """
         Returns for each child no
         :param data_values:
@@ -484,66 +489,95 @@ class OneAttributeSplitMixin(AbstractSplitRule):
         return self.get_tree().get_attribute_names()[idx]
 
 
-class NumericalSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
-
-    def explain_split(self, sample: np.ndarray):
-        state = self.get_state()
-        if state is not None:
-            attr_name = self.get_split_attribute_name()
-            split_val = state['split_value']
-            attr_index = self.get_split_attribute_index()
-
-            attr = sample[attr_index]
-
-            if attr is None:
-                return f"Attribute \"{attr_name}\" is not available"
-            else:
-                if attr < split_val:
-                    return f"\"{attr_name}\" < " \
-                           f"{round(split_val, 2)}"
-                else:
-                    return f"\"{attr_name}\" ≥ " \
-                           f"{round(split_val, 2)}"
-        else:
-            raise Exception("Numerical split not initialized, hence, cannot explain a decision (Code: 8903485768930)")
-
-    def user_readable_description(self):
-        """
-        Will return what the split was about
-        :return:
-        """
-        state = self.get_state()
-
-        if state is not None:
-            attr_name = self.get_split_attribute_name()
-            split_val = state['split_value']
-            return f"{attr_name} < " \
-                   f"{round(split_val, 2)}"
-        else:
-            return "Numerical split not initialized"
-
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
-        state = self.get_state()
-        val = state['split_value']
-        attr_idx = self.get_split_attribute_index()
-
-        attr = sample[attr_idx]
-        if attr is None:
-            return self.get_child_nodes()
-        else:
-            if attr < val:
-                return [self.get_child_nodes()[0]]
-            else:
-                return [self.get_child_nodes()[1]]
-
-    def _get_children_indexer_and_state(self, data_values: np.ndarray):
-        split_member = np.median(data_values)
-        left = data_values < split_member
-        right = ~left
-        state = {'split_value': split_member}
-
-        return [(state, (left, right))]
+# class NumericalSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
+#
+#     def explain_split(self, sample: np.ndarray):
+#         state = self.get_state()
+#         if state is not None:
+#             attr_name = self.get_split_attribute_name()
+#             split_val = state['split_value']
+#             attr_index = self.get_split_attribute_index()
+#
+#             attr = sample[attr_index]
+#
+#             if attr is None:
+#                 return f"Attribute \"{attr_name}\" is not available"
+#             else:
+#                 if attr < split_val:
+#                     return f"\"{attr_name}\" < " \
+#                            f"{round(split_val, 2)}"
+#                 else:
+#                     return f"\"{attr_name}\" ≥ " \
+#                            f"{round(split_val, 2)}"
+#         else:
+#             raise Exception("Numerical split not initialized, hence, cannot explain a decision (Code: 8903485768930)")
+#
+#     def user_readable_description(self):
+#         """
+#         Will return what the split was about
+#         :return:
+#         """
+#         state = self.get_state()
+#
+#         if state is not None:
+#             attr_name = self.get_split_attribute_name()
+#             split_val = state['split_value']
+#             return f"{attr_name} < " \
+#                    f"{round(split_val, 2)}"
+#         else:
+#             return "Numerical split not initialized"
+#
+#     def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+#         super().get_child_nodes_for_sample(sample=sample)
+#         state = self.get_state()
+#         val = state['split_value']
+#         attr_idx = self.get_split_attribute_index()
+#
+#         attr = sample[attr_idx]
+#         if attr is None:
+#             return self.get_child_nodes()
+#         else:
+#             if attr < val:
+#                 return [self.get_child_nodes()[0]]
+#             else:
+#                 return [self.get_child_nodes()[1]]
+#
+#     def _get_children_indexer_and_state(self, data_values: np.ndarray):
+#         labels = self.get_node().get_labels()
+#         vals_labels = np.c_[data_values, labels]
+#         sorted_vals_labels = np.sort(vals_labels, axis=0)
+#         best = float('inf')
+#         split_val = None
+#         measure = self.get_tree().get_information_measure()
+#         sample_cnt = len(data_values)
+#
+#         for i in range(len(sorted_vals_labels)):
+#
+#             value_left = measure.calculate_for_labels(sorted_vals_labels[:1, 1], normalize=False)
+#             value_right = measure.calculate_for_labels(sorted_vals_labels[1:, 1], normalize=False)
+#
+#             val = (i/sample_cnt) * value_left + ((sample_cnt-i)/sample_cnt) * value_right
+#
+#             if val < best:
+#                 best = val
+#                 split_val = sorted_vals_labels[i, 0]
+#
+#         if split_val is not None:
+#             left = data_values < split_val
+#             return [({'split_value': split_val}, (left, ~left))]
+#
+#         return None
+#
+#         # vals_with_idx = np.c_[data_values, np.arange(0, len(data_values), 1)]
+#         #for val_idx in enumerate(vals_with_idx):
+#         #   idx = val_idx[0]
+#             #left = data_values < val_idx[0]
+#             #right = ~left
+#             #state = {'split_value': split_member}
+#
+#         #    results.append((state, (left, right)))
+#
+#         #return results
 
 
 class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
@@ -778,7 +812,6 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         if state is not None:
             attr_name = self.get_split_attribute_name()
             lookup = state['label_to_node_idx_lookup']
-            print(lookup.keys())
             return f"Split on categorical attribute \"{attr_name}\" with possible values: {', '.join([*lookup.keys()])}"
         else:
             return "Single Category Split is not evaluated"
@@ -829,11 +862,123 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
                 node_indexer.append(data_values == lbl)
                 label_to_node_idx_lookup[lbl] = i
 
-            return [({'label_to_node_idx_lookup': label_to_node_idx_lookup},\
-                   tuple(node_indexer))]
+            return [({'label_to_node_idx_lookup': label_to_node_idx_lookup},
+                     tuple(node_indexer))]
 
         return None
 
+class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
+
+    @property
+    @abstractmethod
+    def quantile_count(self) -> int:
+        """
+        Returns the amount of quantiles you want to check
+        :return:
+        """
+        pass
+
+    """
+    Will to split like a NumericalSplit but only over #quantile threasholds
+    implement specific version with quantile_count set
+    """
+
+    def explain_split(self, sample: np.ndarray):
+        state = self.get_state()
+        if state is not None:
+            attr_name = self.get_split_attribute_name()
+            split_val = state['split_value']
+            attr_index = self.get_split_attribute_index()
+
+            attr = sample[attr_index]
+            quantile_val = state['quantile']
+            quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+            if attr is None:
+                return f"Attribute \"{attr_name}\" is not available"
+            else:
+                quantile_str = f""
+                if attr < split_val:
+                    return f"\"{attr_name}\" < " \
+                           f"{round(split_val, 2)} (=Groups {quantile_str}. Quantile))"
+                else:
+                    return f"\"{attr_name}\" ≥ " \
+                           f"{round(split_val, 2)} (=Groups {quantile_str}. Quantile)"
+        else:
+            raise Exception("Quantile split not initialized, hence, cannot explain a decision (Code: 3425345)")
+
+    def user_readable_description(self):
+        """
+        Will return what the split was about
+        :return:
+        """
+        state = self.get_state()
+
+        if state is not None:
+            attr_name = self.get_split_attribute_name()
+            split_val = state['split_value']
+            quantile_val = state['quantile']
+            quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+            return f"{attr_name} < " \
+                   f"{round(split_val, 2) }(=Groups {quantile_str}. Quantile)"
+        else:
+            return "Quantile Split split not initialized"
+
+    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_nodes_for_sample(sample=sample)
+        state = self.get_state()
+        val = state['split_value']
+        attr_idx = self.get_split_attribute_index()
+
+        attr = sample[attr_idx]
+        if attr is None:
+            return self.get_child_nodes()
+        else:
+            if attr < val:
+                return [self.get_child_nodes()[0]]
+            else:
+                return [self.get_child_nodes()[1]]
+
+    def _get_children_indexer_and_state(self, data_values: np.ndarray):
+        quantiles = self.quantile_count
+        assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 3284723894)"
+
+        quantile_parts = [(q+1)/(quantiles+1) for q in range(quantiles)]
+        quantile_vals = np.quantile(data_values, quantile_parts)
+        results = []
+        for i, q_val in enumerate(quantile_vals):
+
+            left = data_values < q_val
+            results.append(
+                ({'split_value': q_val,
+                  'quantile': i}, (left, ~left))
+            )
+
+        return results
+
+class FiveQuantileSplit(AbstractQuantileSplit):
+
+    @property
+    def quantile_count(self):
+        return 5
 
 
+class TenQuantileSplit(AbstractQuantileSplit):
 
+    @property
+    def quantile_count(self):
+        return 10
+
+
+class MedianSplit(AbstractQuantileSplit):
+    """
+    Will separate on Median Element
+    """
+    @property
+    def quantile_count(self):
+        return 1
+
+class OneQuantileSplit(MedianSplit):
+    """
+    Just a convinient name
+    """
+    pass

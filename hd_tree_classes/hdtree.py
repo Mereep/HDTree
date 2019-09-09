@@ -205,6 +205,9 @@ class AbstractHDTree(ABC):
             current_nodes_to_split = collected_children
             level += 1
 
+            if level == 15:
+                level = 15
+
             if self._max_levels is not None and self._max_levels == level:
                 break
 
@@ -427,3 +430,5 @@ class HDTreeClassifier(AbstractHDTree):
 
     def fit(self, X, y):
         super().fit(X=X, y=y)
+
+

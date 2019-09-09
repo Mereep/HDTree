@@ -38,14 +38,16 @@ class AbstractInformationMeasure(ABC):
         """
         pass
 
-    @abstractmethod
-    def calculate_for_single_node(self, node: Node) -> Optional[float]:
+    def calculate_for_single_node(self, node: Node, normalize: bool= True) -> Optional[float]:
         """
         calculates score of a single node
+        this is just a wrapper around @see calculate_for_labels
         :param node:
+        :param normalize: Value will be between 0..1
         :return:
         """
-        pass
+        labels = node.get_labels()
+        return self.calculate_for_labels(labels=labels, normalize=normalize)
 
     @abstractmethod
     def supports_regression(self) -> bool:
@@ -53,6 +55,10 @@ class AbstractInformationMeasure(ABC):
 
     @abstractmethod
     def supports_classification(self) -> bool:
+        pass
+
+    @abstractmethod
+    def calculate_for_labels(self, labels: np.ndarray, normalize: bool=True) -> float:
         pass
 
     def __call__(self, parent_node: Node) -> Optional[float]:
@@ -95,8 +101,8 @@ class RelativeAccuracyMeasure(AbstractInformationMeasure):
 
         return pureness_childs
 
-    def calculate_for_single_node(self, node: Node):
-        node_cats = node.get_labels()
+    def calculate_for_labels(self, labels: np.ndarray, normalize: bool=True):
+        node_cats = labels
         most_common_class = Counter(node_cats).most_common()[0][0]
         accuracy = sum(node_cats == most_common_class) / len(node_cats)
 
@@ -106,7 +112,7 @@ class RelativeAccuracyMeasure(AbstractInformationMeasure):
 class EntropyMeasure(AbstractInformationMeasure):
     """
     Counts relative pureness of the nodes
-    by 1/node_proportion * (accuracy_child)
+    by 1/node_proportion * (entropy child)
     """
 
     def supports_regression(self):
@@ -125,6 +131,7 @@ class EntropyMeasure(AbstractInformationMeasure):
 
         n_total_samples = sum(len(node.get_labels()) for node in child_nodes)
         pureness_childs = 0.
+
         for node in child_nodes:
             child_cats = node.get_labels()
             entropie = self.calculate_for_single_node(node=node)
@@ -132,11 +139,11 @@ class EntropyMeasure(AbstractInformationMeasure):
 
         return pureness_childs
 
-    def calculate_for_single_node(self, node: Node):
-
-        node_cats = node.get_labels()
+    def calculate_for_labels(self, labels: np.ndarray, normalize=True):
+        node_cats = labels
         n_cats = len(set(node_cats))
-        # maximum clean if only one categorie
+
+        # maximum clean if only one category
         if n_cats == 1:
             return 1
 
@@ -147,10 +154,10 @@ class EntropyMeasure(AbstractInformationMeasure):
             p = amount / n_samples
             val += p * np.log2(p)
 
-        # normalize 0..1
-        p_worst = (n_samples/n_cats)/n_samples
-        max_entropy = (p_worst*np.log2(p_worst))*n_cats
-        val = val/max_entropy
+        if normalize:
+            # normalize 0..1
+            p_worst = (n_samples / n_cats) / n_samples
+            max_entropy = (p_worst * np.log2(p_worst)) * n_cats
+            val = val / max_entropy
 
         return 1. - val
-
