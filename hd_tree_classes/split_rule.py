@@ -236,7 +236,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
         # iterate over all attributes that are available
         # will iterate over two attribute indices where each pair is only regarded exactly once
         for i in range(len(supported_cols)):
-            for j in range(i, len(supported_cols)):
+            for j in range(i+1, len(supported_cols)):
                 attr_idx1 = supported_cols[i]
                 attr_idx2 = supported_cols[j]
                 col_data_1 = node_data[:, attr_idx1]
@@ -786,7 +786,9 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             else:
                 return [self.get_child_nodes()[1]]
 
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
+    def _get_children_indexer_and_state(self,
+                                        data_values_left: np.ndarray,
+                                        data_values_right: np.ndarray):
         left_vals = data_values_left < 0.5 * data_values_right
         state = {}
 
@@ -831,7 +833,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
                        f"hence assigned to all childs"
             else:
                 attr_node = lookup[attr]
-                return f"\"{attr_name}\" is {attr}, hence assigned it to node number {attr_node+1}"
+                return f"\"{attr_name}\" has value \"{attr}\", hence assigned it to node number {attr_node+1}"
 
         else:
             raise Exception("Single Category Split Split not initialized, hence, "
@@ -867,6 +869,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
 
         return None
 
+
 class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
     @property
@@ -896,13 +899,12 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             if attr is None:
                 return f"Attribute \"{attr_name}\" is not available"
             else:
-                quantile_str = f""
                 if attr < split_val:
                     return f"\"{attr_name}\" < " \
-                           f"{round(split_val, 2)} (=Groups {quantile_str}. Quantile))"
+                           f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile))"
                 else:
                     return f"\"{attr_name}\" ≥ " \
-                           f"{round(split_val, 2)} (=Groups {quantile_str}. Quantile)"
+                           f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             raise Exception("Quantile split not initialized, hence, cannot explain a decision (Code: 3425345)")
 
@@ -919,7 +921,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             quantile_val = state['quantile']
             quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
             return f"{attr_name} < " \
-                   f"{round(split_val, 2) }(=Groups {quantile_str}. Quantile)"
+                   f"{round(split_val, 2) } (=Groups' {quantile_str}. Quantile)"
         else:
             return "Quantile Split split not initialized"
 
@@ -954,6 +956,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             )
 
         return results
+
 
 class FiveQuantileSplit(AbstractQuantileSplit):
 

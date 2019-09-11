@@ -69,9 +69,6 @@ if __name__ == '__main__':
     y_titanic = df_titanic.loc[:, 'Survived'].values
     x_titanic = df_titanic_ok.values
 
-    #c45 = DecisionTreeClassifier()
-    #c45.fit(x_titanic, y_titanic)
-
     hd_tree_titanic = HDTreeClassifier(allowed_splits=[
                                                        LessThanHalfOfSplit,
                                                        SingleCategorySplit,
@@ -81,7 +78,7 @@ if __name__ == '__main__':
                                                        MedianSplit,
                                                      ],
                                        information_measure=EntropyMeasure(),
-                                       max_levels=None, min_samples_at_leaf=1,
+                                       max_levels=None, min_samples_at_leaf=2,
                                        verbose=True, attribute_names=[*df_titanic_ok.columns])
 
 
