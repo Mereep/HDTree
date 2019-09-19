@@ -86,7 +86,6 @@ class AbstractHDTree(ABC):
         assert samples.shape[1] == len(self.get_attribute_names()), "Amount of labels has to match amount of " \
                                                                  "features (Code: 23842039482)"
 
-        node = self._node_head
         ret_classes = []
 
         for sample in samples:
@@ -141,7 +140,6 @@ class AbstractHDTree(ABC):
         """
         childs = start_node.get_child_nodes_for_sample(sample=sample)
         leafs = []
-
         if not childs:
             childs = []
             leafs = [start_node]
@@ -164,6 +162,7 @@ class AbstractHDTree(ABC):
 
         self._labels = y
         self._train_data = X
+        self._cached_predictions: typing.Dict = {}
 
         status, msg = self._check_preconditions()
         if status is False:
@@ -204,9 +203,6 @@ class AbstractHDTree(ABC):
 
             current_nodes_to_split = collected_children
             level += 1
-
-            if level == 15:
-                level = 15
 
             if self._max_levels is not None and self._max_levels == level:
                 break
@@ -377,6 +373,9 @@ class HDTreeClassifier(AbstractHDTree):
 
         return status, msg
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def _supports_classification(cls):
         return True
 
@@ -403,24 +402,33 @@ class HDTreeClassifier(AbstractHDTree):
 
         return str
 
-    def _get_prediction_for_node(self, node: Node) -> str:
+    def _get_prediction_for_node(self, node: Node, force_recalculation: bool=False) -> str:
         """
         Will return the value that a sample would be assigned if designated to that specific node
         :param node:
         :return:
         """
-        labels = node.get_labels()
-        return Counter(labels).most_common()[0][0]
+        is_cached = node in self._cached_predictions
+
+        if not is_cached or force_recalculation:
+
+            labels = node.get_labels()
+            self._cached_predictions[node] = Counter(labels).most_common()[0][0]
+
+        return self._cached_predictions[node]
 
     def _predict_sample(self, sample: np.ndarray) -> str:
-        target_nodes = self._follow_for_sample_to_leafs(start_node=self._node_head, sample=sample)
+        target_nodes = self._follow_for_sample_to_leafs(start_node=self._node_head,
+                                                        sample=sample)
         node_vals = []
 
         # retrieve value for ever node
         for target_node in target_nodes:
-            node_vals.append((len(target_node.get_labels()), self._get_prediction_for_node(node=target_node)))
+            node_vals.append((target_node.get_sample_count(),
+                              self._get_prediction_for_node(node=target_node)))
 
-        sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
+
+        #sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
         classes = [node_val[1] for node_val in node_vals]
 
         class_occurrences = Counter(classes).most_common()

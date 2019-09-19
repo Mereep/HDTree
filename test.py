@@ -20,7 +20,9 @@ from sklearn.tree import DecisionTreeClassifier
 import random
 from hd_tree_classes.hdtree import HDTreeClassifier
 from hd_tree_classes.split_rule import SmallerThanSplit, SingleCategorySplit, LessThanHalfOfSplit, \
-    CloseToMedianSplit, FiveQuantileSplit, TenQuantileSplit, MedianSplit
+    CloseToMedianSplit, FiveQuantileSplit, TenQuantileSplit, MedianSplit, MedianMultiplicativeQuantileSplit, \
+    TenQuantileMultiplicativeSplit, FiveQuantileMultiplicativeSplit, FiveQuantileAdditiveSplit, TenQuantileAdditiveSplit, \
+    MedianAdditiveQuantileSplit
 from sklearn.metrics import accuracy_score
 import pandas as pd
 
@@ -53,10 +55,10 @@ if __name__ == '__main__':
     y_data = np.array([str(random.randint(0,1)) for i in range(len(X_data))])
 
     tree = HDTreeClassifier(allowed_splits=[LessThanHalfOfSplit],
-                           information_measure=RelativeAccuracyMeasure(),
-                           max_levels=3,
-                           min_samples_at_leaf=2,
-                           verbose=True)
+                            information_measure=RelativeAccuracyMeasure(),
+                            max_levels=3,
+                            min_samples_at_leaf=2,
+                            verbose=True)
 
 
     tree.fit(x_data_decision_tree, y_data_decision_tree)
@@ -70,16 +72,19 @@ if __name__ == '__main__':
     x_titanic = df_titanic_ok.values
 
     hd_tree_titanic = HDTreeClassifier(allowed_splits=[
-                                                       LessThanHalfOfSplit,
-                                                       SingleCategorySplit,
-                                                       SmallerThanSplit,
-                                                       TenQuantileSplit,
-                                                       CloseToMedianSplit,
-                                                       MedianSplit,
-                                                     ],
-                                       information_measure=EntropyMeasure(),
-                                       max_levels=None, min_samples_at_leaf=2,
-                                       verbose=True, attribute_names=[*df_titanic_ok.columns])
+        LessThanHalfOfSplit,
+        SingleCategorySplit,
+        SmallerThanSplit,
+        TenQuantileSplit,
+        CloseToMedianSplit,
+        MedianSplit,
+        TenQuantileMultiplicativeSplit,
+        FiveQuantileMultiplicativeSplit,
+        MedianMultiplicativeQuantileSplit,
+    ],
+        information_measure=EntropyMeasure(),
+        max_levels=None, min_samples_at_leaf=2,
+        verbose=True, attribute_names=[*df_titanic_ok.columns])
 
 
     hd_tree_titanic.fit(x_titanic, y_titanic)

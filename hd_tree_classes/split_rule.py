@@ -489,97 +489,6 @@ class OneAttributeSplitMixin(AbstractSplitRule):
         return self.get_tree().get_attribute_names()[idx]
 
 
-# class NumericalSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
-#
-#     def explain_split(self, sample: np.ndarray):
-#         state = self.get_state()
-#         if state is not None:
-#             attr_name = self.get_split_attribute_name()
-#             split_val = state['split_value']
-#             attr_index = self.get_split_attribute_index()
-#
-#             attr = sample[attr_index]
-#
-#             if attr is None:
-#                 return f"Attribute \"{attr_name}\" is not available"
-#             else:
-#                 if attr < split_val:
-#                     return f"\"{attr_name}\" < " \
-#                            f"{round(split_val, 2)}"
-#                 else:
-#                     return f"\"{attr_name}\" ≥ " \
-#                            f"{round(split_val, 2)}"
-#         else:
-#             raise Exception("Numerical split not initialized, hence, cannot explain a decision (Code: 8903485768930)")
-#
-#     def user_readable_description(self):
-#         """
-#         Will return what the split was about
-#         :return:
-#         """
-#         state = self.get_state()
-#
-#         if state is not None:
-#             attr_name = self.get_split_attribute_name()
-#             split_val = state['split_value']
-#             return f"{attr_name} < " \
-#                    f"{round(split_val, 2)}"
-#         else:
-#             return "Numerical split not initialized"
-#
-#     def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-#         super().get_child_nodes_for_sample(sample=sample)
-#         state = self.get_state()
-#         val = state['split_value']
-#         attr_idx = self.get_split_attribute_index()
-#
-#         attr = sample[attr_idx]
-#         if attr is None:
-#             return self.get_child_nodes()
-#         else:
-#             if attr < val:
-#                 return [self.get_child_nodes()[0]]
-#             else:
-#                 return [self.get_child_nodes()[1]]
-#
-#     def _get_children_indexer_and_state(self, data_values: np.ndarray):
-#         labels = self.get_node().get_labels()
-#         vals_labels = np.c_[data_values, labels]
-#         sorted_vals_labels = np.sort(vals_labels, axis=0)
-#         best = float('inf')
-#         split_val = None
-#         measure = self.get_tree().get_information_measure()
-#         sample_cnt = len(data_values)
-#
-#         for i in range(len(sorted_vals_labels)):
-#
-#             value_left = measure.calculate_for_labels(sorted_vals_labels[:1, 1], normalize=False)
-#             value_right = measure.calculate_for_labels(sorted_vals_labels[1:, 1], normalize=False)
-#
-#             val = (i/sample_cnt) * value_left + ((sample_cnt-i)/sample_cnt) * value_right
-#
-#             if val < best:
-#                 best = val
-#                 split_val = sorted_vals_labels[i, 0]
-#
-#         if split_val is not None:
-#             left = data_values < split_val
-#             return [({'split_value': split_val}, (left, ~left))]
-#
-#         return None
-#
-#         # vals_with_idx = np.c_[data_values, np.arange(0, len(data_values), 1)]
-#         #for val_idx in enumerate(vals_with_idx):
-#         #   idx = val_idx[0]
-#             #left = data_values < val_idx[0]
-#             #right = ~left
-#             #state = {'split_value': split_member}
-#
-#         #    results.append((state, (left, right)))
-#
-#         #return results
-
-
 class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
     """
     Will split on a numerical attributes median +- 1/2 * stdev
@@ -624,7 +533,7 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             stdev = state['stdev']
 
             return f"{attr_name} is close to groups' median of " \
-                   f"{median} (± ½ × σ = {0.5 * round(stdev, 2)})?"
+                   f"{median} (± ½ × σ = {0.5 * round(stdev, 2)})"
         else:
             return "Close To Median Split is not initialized"
 
@@ -795,6 +704,7 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
         return [(state, (left_vals, ~left_vals))]
 
 
+
 class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
     """
    Will split on a single categorical attribute
@@ -962,14 +872,14 @@ class FiveQuantileSplit(AbstractQuantileSplit):
 
     @property
     def quantile_count(self):
-        return 5
+        return 4
 
 
 class TenQuantileSplit(AbstractQuantileSplit):
 
     @property
     def quantile_count(self):
-        return 10
+        return 9
 
 
 class MedianSplit(AbstractQuantileSplit):
@@ -980,8 +890,245 @@ class MedianSplit(AbstractQuantileSplit):
     def quantile_count(self):
         return 1
 
+
 class OneQuantileSplit(MedianSplit):
     """
     Just a convinient name
     """
     pass
+
+
+class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSplit):
+    """
+    Will multiply two attributes and finds best cut point dividing the multiplicative result into
+    given amount of quantiles
+    """
+
+    @property
+    @abstractmethod
+    def quantile_count(self) -> int:
+        """
+        How many quantiles the data should be divided to?
+        :return:
+        """
+        pass
+
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._used_attributes: typing.Tuple[int, int] = None
+
+    def user_readable_description(self):
+        """
+        Will return what the split was about
+        :return:
+        """
+        state = self.get_state()
+        if state is not None:
+            attr_name_1, attr_name_2 = self.get_split_attribute_names()
+            split_val = state['split_value']
+
+            quantile_val = state['quantile']
+            quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+
+            return f"{attr_name_1} * {attr_name_2} < " \
+                   f"{round(split_val, 2) } (=Groups' {quantile_str}. Quantile)"
+        else:
+            return "Multiplicative split is not initialized"
+
+    def explain_split(self, sample: np.ndarray):
+        state = self.get_state()
+        if state is not None:
+            attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
+            attr1 = sample[attr_idx_1]
+            attr2 = sample[attr_idx_2]
+
+            attr_name_1, attr_name_2 = self.get_split_attribute_names()
+
+            if attr1 is None:
+                return f"Attribute \"{attr_name_1}\" is not available, hence assigned to both children"
+            elif attr2 is None:
+                return f"Attribute \"{attr_name_2}\" is not available, hence assigned to both children"
+            else:
+                split_val = state['split_value']
+                quantile_val = state['quantile']
+                quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+
+                if (attr1 * attr2) < split_val:
+                    return f"\"{attr_name_1}\" * < \"{attr_name_1}\" <" \
+                           f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile))"
+                else:
+                    return f"\"{attr_name_1}\" * < \"{attr_name_2}\" ≥ " \
+                           f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
+        else:
+            raise Exception("Multiplicative Split is not initialized, hence "
+                            "cannot explain a decision (Code: 345348752376)")
+
+    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_nodes_for_sample(sample=sample)
+        attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
+        attr1 = sample[attr_idx_1]
+        attr2 = sample[attr_idx_2]
+        split_val = self.get_state()['split_value']
+        if attr1 is None or attr2 is None:
+            return self.get_child_nodes()
+        else:
+            if (attr1 * attr2) < split_val:
+                return [self.get_child_nodes()[0]]
+            else:
+                return [self.get_child_nodes()[1]]
+
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
+        quantiles = self.quantile_count
+        assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 45645645)"
+
+        multiplicative_feature = data_values_left * data_values_right
+
+        quantile_parts = [(q + 1) / (quantiles + 1) for q in range(quantiles)]
+        quantile_vals = np.quantile(multiplicative_feature, quantile_parts)
+
+        results = []
+        for i, q_val in enumerate(quantile_vals):
+            left = multiplicative_feature < q_val
+            results.append(
+                ({'split_value': q_val,
+                  'quantile': i}, (left, ~left))
+            )
+
+        return results
+
+
+class MedianMultiplicativeQuantileSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 1
+
+
+class TenQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 9
+
+
+class FiveQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 4
+
+
+class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSplit):
+    """
+    Will add two attributes and findsbest cut point dividing the additive result into
+    given amount of quantiles
+    """
+
+    @property
+    @abstractmethod
+    def quantile_count(self) -> int:
+        """
+        How many quantiles the data should be divided to?
+        :return:
+        """
+        pass
+
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._used_attributes: typing.Tuple[int, int] = None
+
+    def user_readable_description(self):
+        """
+        Will return what the split was about
+        :return:
+        """
+        state = self.get_state()
+        if state is not None:
+            attr_name_1, attr_name_2 = self.get_split_attribute_names()
+            split_val = state['split_value']
+
+            quantile_val = state['quantile']
+            quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+
+            return f"{attr_name_1} + {attr_name_2} < " \
+                   f"{round(split_val, 2) } (=Groups' {quantile_str}. Quantile)"
+        else:
+            return "Multiplicative split is not initialized"
+
+    def explain_split(self, sample: np.ndarray):
+        state = self.get_state()
+        if state is not None:
+            attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
+            attr1 = sample[attr_idx_1]
+            attr2 = sample[attr_idx_2]
+
+            attr_name_1, attr_name_2 = self.get_split_attribute_names()
+
+            if attr1 is None:
+                return f"Attribute \"{attr_name_1}\" is not available, hence assigned to both children"
+            elif attr2 is None:
+                return f"Attribute \"{attr_name_2}\" is not available, hence assigned to both children"
+            else:
+                split_val = state['split_value']
+                quantile_val = state['quantile']
+                quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+
+                if (attr1 * attr2) < split_val:
+                    return f"\"{attr_name_1}\" + < \"{attr_name_1}\" <" \
+                           f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile))"
+                else:
+                    return f"\"{attr_name_1}\" + < \"{attr_name_2}\" ≥ " \
+                           f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
+        else:
+            raise Exception("Additive Split is not initialized, hence "
+                            "cannot explain a decision (Code: 3453454)")
+
+    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_nodes_for_sample(sample=sample)
+        attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
+        attr1 = sample[attr_idx_1]
+        attr2 = sample[attr_idx_2]
+        split_val = self.get_state()['split_value']
+        if attr1 is None or attr2 is None:
+            return self.get_child_nodes()
+        else:
+            if (attr1 + attr2) < split_val:
+                return [self.get_child_nodes()[0]]
+            else:
+                return [self.get_child_nodes()[1]]
+
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
+        quantiles = self.quantile_count
+        assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 34534534)"
+
+        multiplicative_feature = data_values_left + data_values_right
+
+        quantile_parts = [(q + 1) / (quantiles + 1) for q in range(quantiles)]
+        quantile_vals = np.quantile(multiplicative_feature, quantile_parts)
+
+        results = []
+        for i, q_val in enumerate(quantile_vals):
+            left = multiplicative_feature < q_val
+            results.append(
+                ({'split_value': q_val,
+                  'quantile': i}, (left, ~left))
+            )
+
+        return results
+
+
+class MedianAdditiveQuantileSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 1
+
+
+class TenQuantileAdditiveSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 9
+
+
+class FiveQuantileAdditiveSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 4

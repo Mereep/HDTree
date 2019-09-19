@@ -82,15 +82,15 @@ class Node:
         """
         return self.get_tree().get_train_data()[self.get_data_indices()]
 
-    def get_labels(self) -> np.ndarray:
-        return self.get_tree().get_train_labels()[self.get_data_indices()]
-
     def get_sample_count(self) -> int:
         """
-        Returns amount of samples assigned to that node
+        Returns amount of samples associated to that node
         :return:
         """
-        return len(self.get_data())
+        return len(self.get_data_indices())
+
+    def get_labels(self) -> np.ndarray:
+        return self.get_tree().get_train_labels()[self.get_data_indices()]
 
     def get_children(self) -> Optional[typing.List['Node']]:
         """
@@ -114,7 +114,7 @@ class Node:
         Checks if no leafs are attached
         :return:
         """
-        return self.get_children() is None or len(self.get_children()) == 0
+        return self.get_children() is None # or len(self.get_children()) == 0
 
     def get_child_nodes_for_sample(self, sample: np.ndarray) -> Optional[typing.List['Node']]:
         """
