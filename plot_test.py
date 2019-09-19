@@ -23,7 +23,7 @@ from sklearn.metrics import accuracy_score
 import pandas as pd
 
 if __name__ == '__main__':
-    df_primitives = pd.read_csv(r"C:\Users\Richard\Dropbox\dev\hdtree\data\primitives.csv")
+    df_primitives = pd.read_csv(r"data/primitives.csv")
     y_primitives = df_primitives.loc[:, 'target'].values
     x_primitives = df_primitives.iloc[:, 1:-1].values
 
@@ -43,7 +43,7 @@ if __name__ == '__main__':
                                                         MedianAdditiveQuantileSplit
                                                     ],
                                    information_measure=EntropyMeasure(),
-                                   max_levels=7, min_samples_at_leaf=None,
+                                   max_levels=8, min_samples_at_leaf=None,
                                    verbose=True,
                                    attribute_names=[*df_primitives.columns][1:-1]
                                   )
@@ -51,8 +51,5 @@ if __name__ == '__main__':
 
     hd_tree_primitives.fit(x_primitives, y_primitives)
 
-    y_pred = hd_tree_primitives.predict(x_primitives)
-    print(accuracy_score(y_true=y_primitives, y_pred=hd_tree_primitives.predict(x_primitives)))
-    print("Done")
-    print(hd_tree_primitives)
-
+    dot = hd_tree_primitives.generate_dot_graph()
+    dot.render("test", format="svg")

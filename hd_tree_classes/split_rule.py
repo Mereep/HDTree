@@ -63,6 +63,15 @@ class AbstractSplitRule(ABC):
         self._child_nodes = child_nodes
 
     @abstractmethod
+    def get_edge_labels(self) -> typing.List[str]:
+        """
+        Returns short labels that can be used as a edge texts
+        justifying the direction
+        :return:
+        """
+        pass
+
+    @abstractmethod
     def user_readable_description(self) -> str:
         """
         Should explain the nodes split in textual form
@@ -176,6 +185,7 @@ class AbstractSplitRule(ABC):
 
     def get_state(self) -> Optional[typing.Dict[str, any]]:
         return self._state
+
 
 
 class AbstractNumericalSplit(AbstractSplitRule):
@@ -520,6 +530,9 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             raise Exception("Close To Median Split not initialized, hence, "
                             "cannot explain a decision (Code: 234678234902347)")
 
+    def get_edge_labels(self):
+        return ["close to median val", "outside median val"]
+
     def user_readable_description(self):
         """
         Will return what the split was about
@@ -591,6 +604,10 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
         else:
             return "Smaller than split not initialized"
 
+    def get_edge_labels(self):
+        attr_name_1, attr_name_2 = self.get_split_attribute_names()
+        return [f"{attr_name_1} < {attr_name_2}", f"{attr_name_1} ≥ {attr_name_2}"]
+
     def explain_split(self, sample: np.ndarray):
         state = self.get_state()
         if state is not None:
@@ -657,6 +674,10 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
                    f"{attr_name_2}"
         else:
             return "Smaller than split not initialized"
+
+    def get_edge_labels(self):
+        attr_name_1, attr_name_2 = self.get_split_attribute_names()
+        return [f"{attr_name_1} < ½ × {attr_name_2}", f"{attr_name_1} ≥ ½ × {attr_name_2}"]
 
     def explain_split(self, sample: np.ndarray):
         state = self.get_state()
@@ -727,6 +748,17 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
             return f"Split on categorical attribute \"{attr_name}\" with possible values: {', '.join([*lookup.keys()])}"
         else:
             return "Single Category Split is not evaluated"
+
+    def get_edge_labels(self):
+        state = self.get_state()
+        lookup = state['label_to_node_idx_lookup']
+        reverse_dict = {value: key for key, value in lookup.items()}
+        labels = []
+
+        for i in range(len(lookup)):
+            labels.append(reverse_dict[i])
+
+        return labels
 
     def explain_split(self, sample: np.ndarray):
         state = self.get_state()
@@ -817,6 +849,11 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             raise Exception("Quantile split not initialized, hence, cannot explain a decision (Code: 3425345)")
+
+    def get_edge_labels(self):
+        state = self.get_state()
+        split_val = state['split_value']
+        return [f"< {round(split_val, 2)}", f"≥  {round(split_val, 2)}"]
 
     def user_readable_description(self):
         """
@@ -936,6 +973,11 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
         else:
             return "Multiplicative split is not initialized"
 
+    def get_edge_labels(self):
+        state = self.get_state()
+        split_val = state['split_value']
+        return [f"< {round(split_val, 2)}", f"≥  {round(split_val, 2)}"]
+
     def explain_split(self, sample: np.ndarray):
         state = self.get_state()
         if state is not None:
@@ -1035,6 +1077,11 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._used_attributes: typing.Tuple[int, int] = None
+
+    def get_edge_labels(self):
+        state = self.get_state()
+        split_val = state['split_value']
+        return [f"< {round(split_val, 2)}", f"≥  {round(split_val, 2)}"]
 
     def user_readable_description(self):
         """

@@ -72,7 +72,7 @@ class Node:
 
     def get_data_indices(self) -> np.ndarray:
         """
-        Returns the indices of the data that are insie that node
+        Returns the indices of the data that are inside that node
         """
         return self._assigned_data_indices
 
@@ -126,6 +126,16 @@ class Node:
             return self.get_split_rule().get_child_nodes_for_sample(sample=sample)
 
         return None
+
+    def get_edge_labels(self) -> typing.List[str]:
+        """
+        Returns the labels of the edges dfined by its split rule if any
+        :return:
+        """
+        if self.is_leaf():
+            return []
+        else:
+            return self.get_split_rule().get_edge_labels()
 
     def explain_split(self, sample: np.ndarray) -> str:
         """

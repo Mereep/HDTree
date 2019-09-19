@@ -24,6 +24,8 @@ from .information_measure import AbstractInformationMeasure
 from .split_rule import AbstractSplitRule, LessThanHalfOfSplit
 import logging
 from collections import Counter
+import graphviz
+from graphviz import Digraph
 
 
 class AbstractHDTree(ABC):
@@ -338,6 +340,93 @@ class AbstractHDTree(ABC):
         """
         pass
 
+    def generate_dot_graph(self) -> Digraph:
+        """
+        Returns the graphical representation of the tree
+        :return:
+        """
+        assert self.is_fit(), "The decision tree is not fit, hence you cannot draw it (Code: 23489723489)"
+
+        # generate new dot environment
+        dot = Digraph(comment='Human Decision Tree Export', encoding="utf-8")
+
+        def plot_one_node(node: Node, node_name: str):
+            """
+            Will plot one node with its inner parts
+            :param node:
+            :param node_name:
+            :return:
+            """
+            description_text = f"\lSamples:      {node.get_sample_count()}" \
+                               f"\lSplit rule:   {node.get_split_rule().__str__()}"
+
+            if self._supports_classification():
+                labels = node.get_labels()
+                description_text += '\n'
+                labels_cnt = Counter(labels)
+                most_common = labels_cnt.most_common()[0][0]
+                for item in sorted(labels_cnt.items()):
+                    name, amount = item
+                    description_text += f"\l{name}: {amount}"
+                    if most_common == name:
+                        description_text += " ✓"
+
+            # color code clean nodes greenish
+            cleaness = node.get_score()
+            hex_number = hex(255 - int(cleaness * 255))[-2:]
+            if hex_number[0] == "x":
+                hex_number = '0' + hex_number[1]
+
+            samples_total = len(self.get_train_labels())
+            samples_in_node = len(node.get_data_indices())
+
+            proportion = samples_in_node/samples_total
+
+            dot.node(node_name,
+                     description_text+'\l ',
+                     shape='box',
+                     style="filled",
+                     fillcolor=f"#{hex_number}ff{hex_number}",
+                     margin="0.3",
+                     fontname="monospace",
+                     penwidth=str(10*proportion)
+                    )
+
+        # draw head node
+        curr_nodes = [(self._node_head, 'Head (Level 0)')]
+        plot_one_node(*curr_nodes[0])
+
+        # draw all childs until no left
+        node_number = 1
+        level = 1
+        while len(curr_nodes) > 0:
+            new_nodes = []
+            for node_name in curr_nodes:
+                parent_node, parent_node_name = node_name
+                childs = parent_node.get_children()
+
+                edge_labels = parent_node.get_edge_labels()
+                if childs is not None:
+                    for child_num, child in enumerate(childs):
+                        child_node_name = f'Node #{node_number} (Level {level}'
+                        plot_one_node(node=child,
+                                      node_name=child_node_name)
+
+                        # scale arrows according to sample amount flowing through them
+                        samples_parent = len(parent_node.get_data_indices())
+                        samples_in_child = len(child.get_data_indices())
+                        proportion = samples_in_child / samples_parent
+                        dot.edge(parent_node_name, child_node_name,
+                                 label=edge_labels[child_num],
+                                 penwidth=str(7*proportion))
+                        new_nodes.append((child, child_node_name))
+                        node_number += 1
+
+            curr_nodes = new_nodes
+            level += 1
+
+        return dot
+
 
 class HDTreeClassifier(AbstractHDTree):
     def _check_preconditions(self):
@@ -422,7 +511,7 @@ class HDTreeClassifier(AbstractHDTree):
                                                         sample=sample)
         node_vals = []
 
-        # retrieve value for ever node
+        # retrieve value for every node
         for target_node in target_nodes:
             node_vals.append((target_node.get_sample_count(),
                               self._get_prediction_for_node(node=target_node)))
@@ -438,5 +527,3 @@ class HDTreeClassifier(AbstractHDTree):
 
     def fit(self, X, y):
         super().fit(X=X, y=y)
-
-
