@@ -26,7 +26,9 @@ class Node:
     and possibly a split rule
     """
 
-    def __init__(self, assigned_data_indices: typing.List[int], tree: 'AbstractHDTree', parent: 'Node'):
+    def __init__(self, assigned_data_indices: typing.List[int],
+                 tree: 'AbstractHDTree',
+                 parent: 'Node'):
         """
         :param _tree: Decision Tree that this Node belongs to
         :param assigned_data_indices: list of data indices hold by that Node
@@ -38,6 +40,7 @@ class Node:
             self._assigned_data_indices: np.ndarray = np.array(assigned_data_indices)
         else:
             self._assigned_data_indices: np.ndarray = assigned_data_indices
+
         self._split_rule = None
         self._parent = parent
         self._tree = tree
@@ -62,6 +65,9 @@ class Node:
         Returns the tree that node belongs to
         """
         return self._tree
+
+    def set_tree(self, tree: 'AbstractHDTree'):
+        self._tree = tree
 
     def get_score(self) -> Optional[float]:
         """

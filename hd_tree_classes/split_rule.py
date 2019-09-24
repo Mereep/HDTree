@@ -22,9 +22,10 @@ import numpy as np
 import pandas as pd
 import logging
 from collections import Counter
+import pickle
+import importlib
 
-
-class AbstractSplitRule(ABC):
+class AbstractSplitRule():
     """
     Represents one specific way
     a node may be split into child nodes
@@ -88,10 +89,19 @@ class AbstractSplitRule(ABC):
         """
         pass
 
-    @abstractmethod
     def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
         """
-        Will return the nodes that the sample hast to follow
+        Will return the nodes that the sample has to follow
+        :param sample:
+        :return:
+        """
+        indices = self.get_child_node_indices_for_sample(sample=sample)
+        return [node for i, node in enumerate(self.get_child_nodes()) if i in indices]
+
+    @abstractmethod
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List[int]:
+        """
+        Returns the indices of the child node that sample would be assigned to
         :param sample:
         :return:
         """
@@ -101,7 +111,7 @@ class AbstractSplitRule(ABC):
                                                                           "trained features (Code: 34234234)"
 
         assert self.get_child_nodes() is not None and len(self.get_child_nodes()) > 1, "There are no child nodes " \
-                                                                                       "attached (Code: 34234234)"
+                                                                                       "attached (Code: 4564567)"
 
     @abstractmethod
     def _get_best_split(self) -> typing.Optional[typing.Tuple[float, typing.List['Node']]]:
@@ -187,7 +197,6 @@ class AbstractSplitRule(ABC):
         return self._state
 
 
-
 class AbstractNumericalSplit(AbstractSplitRule):
     """
     Represents a split over categorical attributes
@@ -246,7 +255,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
         # iterate over all attributes that are available
         # will iterate over two attribute indices where each pair is only regarded exactly once
         for i in range(len(supported_cols)):
-            for j in range(i+1, len(supported_cols)):
+            for j in range(i + 1, len(supported_cols)):
                 attr_idx1 = supported_cols[i]
                 attr_idx2 = supported_cols[j]
                 col_data_1 = node_data[:, attr_idx1]
@@ -550,8 +559,8 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
         else:
             return "Close To Median Split is not initialized"
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         state = self.get_state()
         if state is not None:
             attr_idx = self.get_split_attribute_index()
@@ -560,12 +569,12 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             val = sample[attr_idx]
 
             if val is None:
-                return self.get_child_nodes()
+                return [0, 1]
             else:
                 if abs(median - val) <= 0.5 * stdev:
-                    return [self.get_child_nodes()[0]]
+                    return [0]
                 else:
-                    return [self.get_child_nodes()[1]]
+                    return [1]
 
     def _get_children_indexer_and_state(self, data_values: np.ndarray):
 
@@ -631,19 +640,19 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             raise Exception("Smaller Than Split not initialized, hence, "
                             "cannot explain a decision (Code: 234237423987423)")
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
         attr1 = sample[attr_idx_1]
         attr2 = sample[attr_idx_2]
 
         if attr1 is None or attr2 is None:
-            return self.get_child_nodes()
+            return [0, 1]
         else:
             if attr1 < attr2:
-                return [self.get_child_nodes()[0]]
+                return [0]
             else:
-                return [self.get_child_nodes()[1]]
+                return [1]
 
     def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
         left_vals = data_values_left < data_values_right
@@ -702,19 +711,19 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             raise Exception("Less Than Half Of Split not initialized, hence, "
                             "cannot explain a decision (Code: 23423234234234)")
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
         attr1 = sample[attr_idx_1]
         attr2 = sample[attr_idx_2]
 
         if attr1 is None or attr2 is None:
-            return self.get_child_nodes()
+            return [0, 1]
         else:
             if attr1 < 0.5 * attr2:
-                return [self.get_child_nodes()[0]]
+                return [0]
             else:
-                return [self.get_child_nodes()[1]]
+                return [1]
 
     def _get_children_indexer_and_state(self,
                                         data_values_left: np.ndarray,
@@ -723,7 +732,6 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
         state = {}
 
         return [(state, (left_vals, ~left_vals))]
-
 
 
 class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
@@ -781,8 +789,8 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
             raise Exception("Single Category Split Split not initialized, hence, "
                             "cannot explain a decision (Code: 365345673459683456)")
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         state = self.get_state()
         lookup = state['label_to_node_idx_lookup']
         attr_idx = self.get_split_attribute_index()
@@ -790,9 +798,9 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
 
         # return all nodes if we encounter an invalid value´(at training time) or a None
         if val is None or val not in lookup:
-            return self.get_child_nodes()
+            return [*range(len(lookup))]
         else:
-            return [self.get_child_nodes()[lookup[val]]]
+            return [lookup[val]]
 
     def _get_children_indexer_and_state(self, data_values: np.ndarray):
 
@@ -872,30 +880,29 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
         else:
             return "Quantile Split split not initialized"
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         state = self.get_state()
         val = state['split_value']
         attr_idx = self.get_split_attribute_index()
 
         attr = sample[attr_idx]
         if attr is None:
-            return self.get_child_nodes()
+            return [0, 1]
         else:
             if attr < val:
-                return [self.get_child_nodes()[0]]
+                return [0]
             else:
-                return [self.get_child_nodes()[1]]
+                return [1]
 
     def _get_children_indexer_and_state(self, data_values: np.ndarray):
         quantiles = self.quantile_count
         assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 3284723894)"
 
-        quantile_parts = [(q+1)/(quantiles+1) for q in range(quantiles)]
+        quantile_parts = [(q + 1) / (quantiles + 1) for q in range(quantiles)]
         quantile_vals = np.quantile(data_values, quantile_parts)
         results = []
         for i, q_val in enumerate(quantile_vals):
-
             left = data_values < q_val
             results.append(
                 ({'split_value': q_val,
@@ -919,10 +926,18 @@ class TenQuantileSplit(AbstractQuantileSplit):
         return 9
 
 
+class TwentyQuantileSplit(AbstractQuantileSplit):
+
+    @property
+    def quantile_count(self):
+        return 19
+
+
 class MedianSplit(AbstractQuantileSplit):
     """
     Will separate on Median Element
     """
+
     @property
     def quantile_count(self):
         return 1
@@ -949,7 +964,6 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
         :return:
         """
         pass
-
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1006,19 +1020,19 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
             raise Exception("Multiplicative Split is not initialized, hence "
                             "cannot explain a decision (Code: 345348752376)")
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
         attr1 = sample[attr_idx_1]
         attr2 = sample[attr_idx_2]
         split_val = self.get_state()['split_value']
         if attr1 is None or attr2 is None:
-            return self.get_child_nodes()
+            return [0, 1]
         else:
             if (attr1 * attr2) < split_val:
-                return [self.get_child_nodes()[0]]
+                return [0]
             else:
-                return [self.get_child_nodes()[1]]
+                return [1]
 
     def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
         quantiles = self.quantile_count
@@ -1052,6 +1066,12 @@ class TenQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
         return 9
 
 
+class TwentyQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 19
+
+
 class FiveQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
     @property
     def quantile_count(self):
@@ -1072,7 +1092,6 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
         :return:
         """
         pass
-
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1129,19 +1148,19 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
             raise Exception("Additive Split is not initialized, hence "
                             "cannot explain a decision (Code: 3453454)")
 
-    def get_child_nodes_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
-        super().get_child_nodes_for_sample(sample=sample)
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
+        super().get_child_node_indices_for_sample(sample=sample)
         attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
         attr1 = sample[attr_idx_1]
         attr2 = sample[attr_idx_2]
         split_val = self.get_state()['split_value']
         if attr1 is None or attr2 is None:
-            return self.get_child_nodes()
+            return [0, 1]
         else:
             if (attr1 + attr2) < split_val:
-                return [self.get_child_nodes()[0]]
+                return [0]
             else:
-                return [self.get_child_nodes()[1]]
+                return [1]
 
     def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray):
         quantiles = self.quantile_count
@@ -1179,3 +1198,160 @@ class FiveQuantileAdditiveSplit(AbstractMultiplicativeQuantileSplit):
     @property
     def quantile_count(self):
         return 4
+
+
+class FixedChainRule(AbstractSplitRule):
+    """
+    Represents a ruleset that is a list of paramterized split rules
+    that will be connected using AND
+    """
+    _rules_and_expected_indices: typing.List[typing.Tuple[AbstractSplitRule, int]] = None
+    _name: str = None
+    _version: float = 0.01
+
+    def get_edge_labels(self) -> typing.List[str]:
+        return ['yes', 'no']
+
+    def __init__(self, *args, **kwargs):
+        node = kwargs['node']
+        # change state of the rule to match preconditions
+        for rule, indices in self._rules_and_expected_indices:
+            rule._node = node
+            rule._child_nodes = [None, None]
+            rule._assigned_data_indices = [None, None]
+            rule._is_evaluated = True
+
+
+        super().__init__(node=node)
+
+    def user_readable_description(self) -> str:
+        return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps."
+
+    def explain_split(self, sample: np.ndarray) -> str:
+        res = self._execute(samples=sample.reshape(shape=(1, -1)))[0]
+        if res:
+            return f"Chain rule \ \'{self._name}\' did pass"
+        else:
+            return f"Chain rule \ \'{self._name}\' did NOT pass"
+
+    def get_child_node_indices_for_sample(self, sample: np.ndarray):
+        if self._execute(sample.reshape(shape=(1, -1)))[0]:
+            return [0]
+        else:
+            return [1]
+
+    def _get_best_split(self) -> typing.Optional[typing.Tuple[float, typing.List['Node']]]:
+        node = self.get_node()
+        node_data = node.get_data()
+        node_indices = node.get_data_indices()
+        data_indexer = self._execute(node_data)
+
+        if np.any(data_indexer) and np.any(~data_indexer):
+            child_nodes = [node.create_child_node(node_indices[data_indexer]),
+                           node.create_child_node(node_indices[~data_indexer])]
+            self.set_child_nodes(child_nodes=child_nodes)
+            self.set_child_nodes(child_nodes=child_nodes)
+            self.set_state({})
+            score = self.get_information_measure()(parent_node=self.get_node())
+
+            return score, child_nodes
+
+        return None
+
+    def get_name(self) -> str:
+        return self._name
+
+    def _execute(self, samples: np.ndarray) -> np.array:
+        """
+        Applies the rules onto each sample
+        returning True when they match ALL rules otherwise False
+        :param samples:
+        :return:
+        """
+        ret = np.ndarray(shape=(len(samples),), dtype=np.bool)
+        for i, sample in enumerate(samples):
+            accepts: bool = True
+            for rule_dummy, expected_index in self._rules_and_expected_indices:
+                indices = rule_dummy.get_child_node_indices_for_sample(sample=sample)
+                if expected_index not in indices:
+                    accepts = False
+                    break  # we can stop here since we are not interested for the other results
+
+            ret[i] = accepts
+
+        return ret
+
+    def _get_attribute_candidates(self) -> typing.List[int]:
+        pass
+
+    @classmethod
+    def save_to_file(cls, out_file: str):
+        """
+        Saves the rule to the disk
+        :param out_file:
+        :return:
+        """
+        with open(out_file, 'wb') as f:
+            # this will pickle the rule name (class name) and the _state attribute
+            # together with the expected indices each
+            data = cls._rules_and_expected_indices
+            d = {'rules_and_expected_indices': [(rule.__class__.__name__, rule._state, expected_indices) for rule, expected_indices in data],
+                 'name': cls._name,
+                 'version': cls._version}
+            pickle.dump(d, f)
+
+    @classmethod
+    def load_from_file(cls, in_file: str):
+        """
+        Loads the rule from disk
+        :param in_file:
+        :return:
+        """
+        with open(in_file, 'rb') as f:
+            data = pickle.load(f)
+
+        if not isinstance(data, dict) or data['version'] != cls._version:
+            raise Exception(f"Could not load file since version does not match")
+
+        rules_and_expected_indices = []
+        for rule, config, expected_indices in data['rules_and_expected_indices']:
+            if rule in globals():
+                # load the class
+                kls = globals()[rule](node=None)
+                # set config
+                kls._state = config
+                # create list with intanciated and setup class
+                rules_and_expected_indices.append((kls, expected_indices))
+            else:
+                raise Exception("I tried to instantiate rule {rule} but could not find it"
+                                " in this package (Code: 88999)")
+        return type(cls.__mro__[0].__name__, (cls,), {'_name': data['name'],
+                                                      '_rules_and_expected_indices': rules_and_expected_indices})
+
+    @classmethod
+    def from_node(cls, target_node: 'Node', name: str) -> typing.Type:
+        from hd_tree_classes.node import Node
+
+        split_rules: typing.List[typing.Tuple[AbstractSplitRule, int]] = []
+        while target_node.get_parent():
+            # extract rule path (backwards) get states and child node order
+            node: Node = target_node
+            parent = node.get_parent()
+            parent_rule = parent.get_split_rule()
+            parent_rule_state = parent_rule.get_state()
+            parent_rule_class = parent_rule.__class__
+            expected_child_number = parent_rule.get_child_nodes().index(node)
+
+            parent_rule_dummy = parent_rule_class(node=None)
+            parent_rule_dummy._state = parent_rule_state
+
+            split_rules.append((parent_rule_dummy, expected_child_number))
+            target_node = parent
+
+        split_rules.reverse()
+
+        # generate a dummy class (no instance!) that behaves like a normal Split Rule thingy
+        rule = type(cls.__mro__[0].__name__, (cls,), {'_name': name,
+                                                      '_rules_and_expected_indices': split_rules})
+
+        return rule

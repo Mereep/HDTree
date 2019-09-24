@@ -77,20 +77,20 @@ class AbstractHDTree(ABC):
         """
         return self._labels
 
-    def predict(self, samples: np.ndarray) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """
         Predicts samples in format [n_samples, n_features]
-        :param samples:
+        :param X:
         :return:
         """
         assert self.is_fit(), "Tree is fit on data, hence cannot predict (Code: 2842094823)"
-        assert len(samples.shape) == 2, "Data has to be in format n_samples x n_features (Code: 234234234)"
-        assert samples.shape[1] == len(self.get_attribute_names()), "Amount of labels has to match amount of " \
+        assert len(X.shape) == 2, "Data has to be in format n_samples x n_features (Code: 234234234)"
+        assert X.shape[1] == len(self.get_attribute_names()), "Amount of labels has to match amount of " \
                                                                  "features (Code: 23842039482)"
 
         ret_classes = []
 
-        for sample in samples:
+        for sample in X:
             ret_classes.append(self._predict_sample(sample=sample))
 
         return np.array(ret_classes)
@@ -133,6 +133,23 @@ class AbstractHDTree(ABC):
             ret += '---------------------------------\n'
         return ret
 
+    def extract_node_chain_for_sample(self, sample: np.ndarray) -> typing.List[Node]:
+        target_nodes = self._follow_for_sample_to_leafs(sample=sample, start_node=self._node_head)
+        if len(target_nodes) > 1:
+            raise Exception("Sorry, that samples belongs to more than one leaf node, I have no way to handle that at"
+                            "the moment (Code: 384723894)")
+
+        curr_node = target_nodes[0]
+        nodes_chain = [curr_node]
+
+        while curr_node.get_parent():
+            curr_node = curr_node.get_parent()
+            nodes_chain.append(curr_node)
+
+        nodes_chain.reverse()
+
+        return nodes_chain
+
     def _follow_for_sample_to_leafs(self, start_node: Node, sample: np.ndarray):
         """
         Follows the tree recursively down to the leafs returning all leaf-nodes the sample belongs to
@@ -146,7 +163,7 @@ class AbstractHDTree(ABC):
             childs = []
             leafs = [start_node]
             self._output_message("Warning: That tree does not have any nodes except head. "
-                                 "Predictions will be the datas' priors", only_if_verbose=False)
+                                 "Predictions will be the datas' priors", only_if_verbose=True)
         for child in childs:
             if child.is_leaf():
                 leafs.append(child)
@@ -449,9 +466,9 @@ class HDTreeClassifier(AbstractHDTree):
 
         # labels should not be too much. Basically checking if we are
         # really talking about a classification problem
-        if len(np.unique(labels)) > len(data) * 0.8:
-            status = False
-            msg = "There seem to be unresonable many labels for classification (over 80%) Are you sure? (Code: 34723984)"
+        #if len(np.unique(labels)) > len(data) * 0.8:
+        #    status = False
+        #    msg = "There seem to be unresonable many labels for classification (over 80%) Are you sure? (Code: 34723984)"
 
         if not self._information_measure.supports_classification():
             status = False
