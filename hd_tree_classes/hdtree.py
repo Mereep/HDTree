@@ -41,7 +41,7 @@ class AbstractHDTree(ABC):
         """
         self._train_data = None
         self._labels = None
-        self._node_head = None
+        self._node_head: Node = None
         self._min_samples_at_leaf = min_samples_at_leaf
         self._max_levels = max_levels
         self._allowed_splits = allowed_splits
@@ -133,6 +133,22 @@ class AbstractHDTree(ABC):
             ret += '---------------------------------\n'
         return ret
 
+    def get_node_for_tree_walk(self, edge_indices: typing.List[int]) -> Node:
+        """
+        Will return the node that is the target after walking
+        the edges specified
+        :param edge_indices:
+        :return:
+        """
+        curr_node = self._node_head
+
+        for i, edge_index in enumerate(edge_indices):
+            childs = curr_node.get_children()
+            assert edge_index >= 0 and edge_index < len(childs), f"Node {curr_node} has no child {edge_index} " \
+                                                                 f"(Walk step {i+1})"
+            curr_node = childs[edge_index]
+
+        return curr_node
     def extract_node_chain_for_sample(self, sample: np.ndarray) -> typing.List[Node]:
         target_nodes = self._follow_for_sample_to_leafs(sample=sample, start_node=self._node_head)
         if len(target_nodes) > 1:
@@ -260,6 +276,32 @@ class AbstractHDTree(ABC):
             node_to_split.set_split_rule(best_split)
 
 
+    def get_clean_nodes(self, min_score: float=1., early_break: bool=True, node: Node=None):
+        """
+        Will return all nodes in the tree that have at least the given score
+        :param min_score:
+        :param node:
+        :param early_break: Do not progress into childs if node meets requirement
+        :return:
+        """
+        if node is None:
+            curr_node = self._node_head
+        else:
+            curr_node = node
+        clean_nodes = []
+
+        childs = curr_node.get_children() or []
+
+        for child in childs:
+            progress = True
+            if child.get_score() >= min_score:
+                clean_nodes.append(child)
+                progress = early_break
+
+            if progress:
+                clean_nodes += self.get_clean_nodes(min_score=min_score, node=child, early_break=early_break)
+
+        return clean_nodes
     def _create_node_for_data_indices(self, data_indices: typing.List[int]) -> Node:
         """
         Creates a node for given data indices
@@ -425,7 +467,7 @@ class AbstractHDTree(ABC):
                 edge_labels = parent_node.get_edge_labels()
                 if childs is not None:
                     for child_num, child in enumerate(childs):
-                        child_node_name = f'Node #{node_number} (Level {level}'
+                        child_node_name = f'Node #{node_number} (Level {level})'
                         plot_one_node(node=child,
                                       node_name=child_node_name)
 

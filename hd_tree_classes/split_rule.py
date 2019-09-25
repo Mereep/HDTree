@@ -1195,6 +1195,12 @@ class TenQuantileAdditiveSplit(AbstractMultiplicativeQuantileSplit):
         return 9
 
 
+class TwentyQuantileAdditiveSplit(AbstractMultiplicativeQuantileSplit):
+    @property
+    def quantile_count(self):
+        return 19
+
+
 class FiveQuantileAdditiveSplit(AbstractMultiplicativeQuantileSplit):
     @property
     def quantile_count(self):
@@ -1220,6 +1226,7 @@ class FixedChainRule(AbstractSplitRule):
         if node.get_tree().get_attribute_names() != self._attribute_names:
             raise Exception(f"Attribute names of extracted rule ({self._attribute_names}) does not match to "
                             f"current trees atrributes ({node.get_tree().get_attribute_names()})")
+
         for rule, indices in self._rules_and_expected_indices:
             rule._node = node
             rule._child_nodes = [None, None]
@@ -1227,19 +1234,33 @@ class FixedChainRule(AbstractSplitRule):
             rule._is_evaluated = True
 
         super().__init__(*args, **kwargs)
+        self._state = {
+            '_rules_and_expected_indices': self._rules_and_expected_indices,
+            '_name': self._name,
+            '_version': self._version,
+            '_attribute_names': self._attribute_names
+        }
 
     def user_readable_description(self) -> str:
-        return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps."
+        """
+        Will print all single rules
+        :return:
+        """
+        rules_str_array = [str(rule[0].user_readable_description()) for rule in self._rules_and_expected_indices]
+        rules_str = ''
+        for i, rule_str in enumerate(rules_str_array):
+            rules_str += f'\n  ({i+1}) {rule_str}'
+        return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps:" + rules_str
 
     def explain_split(self, sample: np.ndarray) -> str:
-        res = self._execute(samples=sample.reshape(shape=(1, -1)))[0]
+        res = self._execute(samples=sample.reshape((1, -1)))[0]
         if res:
             return f"Chain rule \ \'{self._name}\' did pass"
         else:
             return f"Chain rule \ \'{self._name}\' did NOT pass"
 
     def get_child_node_indices_for_sample(self, sample: np.ndarray):
-        if self._execute(sample.reshape(shape=(1, -1)))[0]:
+        if self._execute(sample.reshape((1, -1)))[0]:
             return [0]
         else:
             return [1]
