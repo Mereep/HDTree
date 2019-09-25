@@ -24,6 +24,7 @@ import logging
 from collections import Counter
 import pickle
 import importlib
+import json
 
 class AbstractSplitRule():
     """
@@ -1207,7 +1208,8 @@ class FixedChainRule(AbstractSplitRule):
     """
     _rules_and_expected_indices: typing.List[typing.Tuple[AbstractSplitRule, int]] = None
     _name: str = None
-    _version: float = 0.01
+    _version: float = 0.02
+    _attribute_names: typing.List = []
 
     def get_edge_labels(self) -> typing.List[str]:
         return ['yes', 'no']
@@ -1215,14 +1217,16 @@ class FixedChainRule(AbstractSplitRule):
     def __init__(self, *args, **kwargs):
         node = kwargs['node']
         # change state of the rule to match preconditions
+        if node.get_tree().get_attribute_names() != self._attribute_names:
+            raise Exception(f"Attribute names of extracted rule ({self._attribute_names}) does not match to "
+                            f"current trees atrributes ({node.get_tree().get_attribute_names()})")
         for rule, indices in self._rules_and_expected_indices:
             rule._node = node
             rule._child_nodes = [None, None]
             rule._assigned_data_indices = [None, None]
             rule._is_evaluated = True
 
-
-        super().__init__(node=node)
+        super().__init__(*args, **kwargs)
 
     def user_readable_description(self) -> str:
         return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps."
@@ -1291,14 +1295,16 @@ class FixedChainRule(AbstractSplitRule):
         :param out_file:
         :return:
         """
-        with open(out_file, 'wb') as f:
+        with open(out_file, 'w') as f:
             # this will pickle the rule name (class name) and the _state attribute
             # together with the expected indices each
             data = cls._rules_and_expected_indices
             d = {'rules_and_expected_indices': [(rule.__class__.__name__, rule._state, expected_indices) for rule, expected_indices in data],
                  'name': cls._name,
-                 'version': cls._version}
-            pickle.dump(d, f)
+                 'version': cls._version,
+                 'attribute_names': cls._attribute_names}
+            jd = json.dumps(d)
+            f.write(jd)
 
     @classmethod
     def load_from_file(cls, in_file: str):
@@ -1307,8 +1313,8 @@ class FixedChainRule(AbstractSplitRule):
         :param in_file:
         :return:
         """
-        with open(in_file, 'rb') as f:
-            data = pickle.load(f)
+        with open(in_file, 'r') as f:
+            data = json.load(f)
 
         if not isinstance(data, dict) or data['version'] != cls._version:
             raise Exception(f"Could not load file since version does not match")
@@ -1326,7 +1332,8 @@ class FixedChainRule(AbstractSplitRule):
                 raise Exception("I tried to instantiate rule {rule} but could not find it"
                                 " in this package (Code: 88999)")
         return type(cls.__mro__[0].__name__, (cls,), {'_name': data['name'],
-                                                      '_rules_and_expected_indices': rules_and_expected_indices})
+                                                      '_rules_and_expected_indices': rules_and_expected_indices,
+                                                      '_attribute_names': data['attribute_names']})
 
     @classmethod
     def from_node(cls, target_node: 'Node', name: str) -> typing.Type:
@@ -1352,6 +1359,9 @@ class FixedChainRule(AbstractSplitRule):
 
         # generate a dummy class (no instance!) that behaves like a normal Split Rule thingy
         rule = type(cls.__mro__[0].__name__, (cls,), {'_name': name,
-                                                      '_rules_and_expected_indices': split_rules})
+                                                      '_rules_and_expected_indices': split_rules,
+                                                      '_attribute_names': target_node.get_tree().get_attribute_names(),
+
+                                                      })
 
         return rule
