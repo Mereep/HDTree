@@ -43,7 +43,7 @@ if __name__ == '__main__':
                                                         MedianAdditiveQuantileSplit
                                                     ],
                                    information_measure=EntropyMeasure(),
-                                   max_levels=7, min_samples_at_leaf=None,
+                                   max_levels=2, min_samples_at_leaf=None,
                                    verbose=True,
                                    attribute_names=[*df_primitives.columns][1:-1]
                                   )
@@ -55,4 +55,7 @@ if __name__ == '__main__':
     print(accuracy_score(y_true=y_primitives, y_pred=hd_tree_primitives.predict(x_primitives)))
     print("Done")
     print(hd_tree_primitives)
+    print(hd_tree_primitives.classes_,
+          hd_tree_primitives.predict_proba(X=x_primitives[:2]),
+          hd_tree_primitives.predict(X=x_primitives[:2]))
 

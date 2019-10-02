@@ -51,6 +51,25 @@ class AbstractHDTree(ABC):
         self._attribute_names = attribute_names
         self._is_fit = False
 
+    def get_params(self, deep=True):
+        return {
+            'allowed_splits': self._allowed_splits,
+            'information_measure': self._information_measure,
+            'attribute_names': self._attribute_names,
+            'max_levels': self._max_levels,
+            'min_samples_at_leaf': self._min_samples_at_leaf,
+            'verbose': self._verbose
+        }
+
+    def set_params(self, **kwargs):
+        print(kwargs)
+        self._allowed_splits = kwargs['allowed_splits']
+        self._information_measure = kwargs['information_measure']
+        self._attribute_names = kwargs['attribute_names']
+        self._max_levels = kwargs['max_levels']
+        self._min_samples_at_leaf = kwargs['min_samples_at_leaf']
+        self._verbose = kwargs['verbose']
+
     def is_fit(self) -> bool:
         return self._is_fit
 
@@ -77,10 +96,11 @@ class AbstractHDTree(ABC):
         """
         return self._labels
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def _check_predict_preconditions(self, X: np.ndarray):
         """
-        Predicts samples in format [n_samples, n_features]
+        Will check preconditions. If not met will raise
         :param X:
+        :raises
         :return:
         """
         assert self.is_fit(), "Tree is fit on data, hence cannot predict (Code: 2842094823)"
@@ -88,8 +108,15 @@ class AbstractHDTree(ABC):
         assert X.shape[1] == len(self.get_attribute_names()), "Amount of labels has to match amount of " \
                                                                  "features (Code: 23842039482)"
 
-        ret_classes = []
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predicts samples in format [n_samples, n_features]
+        :param X:
+        :return:
+        """
 
+        self._check_predict_preconditions(X=X)
+        ret_classes = []
         for sample in X:
             ret_classes.append(self._predict_sample(sample=sample))
 
@@ -149,7 +176,15 @@ class AbstractHDTree(ABC):
             curr_node = childs[edge_index]
 
         return curr_node
+
     def extract_node_chain_for_sample(self, sample: np.ndarray) -> typing.List[Node]:
+        """
+        Will extract all nodes from the head to the leaf the given sample
+        falls into.
+        It does not support tests on missing values at the moment
+        :param sample:
+        :return:
+        """
         target_nodes = self._follow_for_sample_to_leafs(sample=sample, start_node=self._node_head)
         if len(target_nodes) > 1:
             raise Exception("Sorry, that samples belongs to more than one leaf node, I have no way to handle that at"
@@ -189,7 +224,8 @@ class AbstractHDTree(ABC):
         return leafs
 
     @abstractmethod
-    def fit(self, X: np.ndarray, y: np.ndarray):
+    def fit(self, X: np.ndarray,
+            y: np.ndarray):
         """
         Will train the Tree
         :raises Exception if preconditions are not met
@@ -198,6 +234,7 @@ class AbstractHDTree(ABC):
         self._labels = y
         self._train_data = X
         self._cached_predictions: typing.Dict = {}
+        self.classes_ = [*np.unique(y)]
 
         status, msg = self._check_preconditions()
         if status is False:
@@ -215,7 +252,7 @@ class AbstractHDTree(ABC):
             collected_children = []
 
             for node_to_split in current_nodes_to_split:
-                n_node_samples = len(node_to_split.get_data_indices())
+                # n_node_samples = len(node_to_split.get_data_indices())
 
                 # check if we want to split that node
                 # we do not if we only have one sample or <= requested minimum amount of samples
@@ -402,6 +439,9 @@ class AbstractHDTree(ABC):
     def generate_dot_graph(self) -> Digraph:
         """
         Returns the graphical representation of the tree
+        you can directkly output it into jupyter notebook envs
+        or save it to disk in a variety of file formats
+        only works fully for classification at the moment
         :return:
         """
         assert self.is_fit(), "The decision tree is not fit, hence you cannot draw it (Code: 23489723489)"
@@ -416,8 +456,12 @@ class AbstractHDTree(ABC):
             :param node_name:
             :return:
             """
-            description_text = f"\lSamples:      {node.get_sample_count()}" \
-                               f"\lSplit rule:   {node.get_split_rule().__str__()}"
+            description_text = f"\l Samples:      {node.get_sample_count()}" \
+                               f"\l Score:        {round(node.get_score(), 2)}"
+
+            rule = node.get_split_rule()
+            if rule is not None:
+                description_text += f"\l Rule:   {str.strip(str(rule))}"
 
             if self._supports_classification():
                 labels = node.get_labels()
@@ -522,6 +566,7 @@ class HDTreeClassifier(AbstractHDTree):
         return status, msg
 
     def __init__(self, *args, **kwargs):
+        self.classes_: Optional[typing.List[str]] = None
         super().__init__(*args, **kwargs)
 
     def _supports_classification(cls):
@@ -550,39 +595,96 @@ class HDTreeClassifier(AbstractHDTree):
 
         return str
 
-    def _get_prediction_for_node(self, node: Node, force_recalculation: bool=False) -> str:
+    def _get_prediction_for_node(self, node: Node,
+                                 force_recalculation: bool=False,
+                                 probabilistic: bool=False) -> typing.Union[str, typing.List[float]]:
         """
         Will return the value that a sample would be assigned if designated to that specific node
         :param node:
+        :param probabilistic: if true will return the |most_common| / |samples|
         :return:
         """
-        is_cached = node in self._cached_predictions
 
-        if not is_cached or force_recalculation:
+        if not probabilistic:
+            is_cached = node in self._cached_predictions
 
+            if not is_cached or force_recalculation:
+
+                labels = node.get_labels()
+                self._cached_predictions[node] = Counter(labels).most_common()[0][0]
+
+            return self._cached_predictions[node]
+        else:
+            # list of popabilities is ordered by self.classes_
             labels = node.get_labels()
-            self._cached_predictions[node] = Counter(labels).most_common()[0][0]
+            rets:typing.List[float] = []
+            vals = Counter(labels)
 
-        return self._cached_predictions[node]
+            for cls in self.classes_:
+                rets.append(vals[cls] / len(labels))
 
-    def _predict_sample(self, sample: np.ndarray) -> str:
+            return rets
+
+    def _predict_sample(self, sample: np.ndarray,
+                        probabilistic: bool=False) -> typing.Union[str, typing.List[float]]:
+
         target_nodes = self._follow_for_sample_to_leafs(start_node=self._node_head,
                                                         sample=sample)
-        node_vals = []
+        if len(target_nodes) > 1:
+            raise Exception("Predicting on missing values is not supported atm (Code: 23847238)")
 
-        # retrieve value for every node
-        for target_node in target_nodes:
-            node_vals.append((target_node.get_sample_count(),
-                              self._get_prediction_for_node(node=target_node)))
+        if not probabilistic:
+
+            node_vals = []
+
+            # retrieve value for every node
+            for target_node in target_nodes:
+                node_vals.append((target_node.get_sample_count(),
+                                  self._get_prediction_for_node(node=target_node)))
 
 
-        #sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
-        classes = [node_val[1] for node_val in node_vals]
+            #sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
+            classes = [node_val[1] for node_val in node_vals]
 
-        class_occurrences = Counter(classes).most_common()
-        most_likely_class = class_occurrences[0][0]
+            class_occurrences = Counter(classes).most_common()
+            most_likely_class = class_occurrences[0][0]
 
-        return most_likely_class
+            return most_likely_class
+        else:
+            return self._get_prediction_for_node(node=target_nodes[0], probabilistic=True)
+
+    def predict(self,
+                X: np.ndarray,
+                probabilistic: bool=False):
+
+        self._check_predict_preconditions(X=X)
+
+        if probabilistic:
+            res = np.ndarray(shape=(len(X), len(self.classes_)), dtype=np.float)
+        else:
+            res = np.ndarray(shape=(len(X),), dtype=np.object)
+
+        for i in range(len(X)):
+            pred = self._predict_sample(sample=X[i],
+                                 probabilistic=probabilistic)
+            if probabilistic:
+                res[i, :] = pred
+            else:
+                res[i] = pred
+
+        if probabilistic:
+            return res
+        else:
+            # having it as str from initialization doesnt work
+            return res.astype(np.str)
+
+    def predict_proba(self, X: np.ndarray):
+        """
+        Will return probabilistic results as list for each class ordered by self.classes_
+        :param X:
+        :return:
+        """
+        return self.predict(X=X, probabilistic=True)
 
     def fit(self, X, y):
         super().fit(X=X, y=y)
