@@ -25,15 +25,23 @@ from collections import Counter
 import pickle
 import importlib
 import json
+import sys
 
-class AbstractSplitRule():
+
+class AbstractSplitRule:
     """
     Represents one specific way
     a node may be split into child nodes
     """
 
-    # from .node import Node
-    # from .hdtree import AbstractHDTree
+    _min_level: int = 0               # minimum level this rule may be applied from
+    _max_level:int = sys.maxsize      # maximum level that rule may be applied to
+
+    # restrict to the given attributes
+    _whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None
+
+    # remove application of the rule from these
+    _blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None
 
     def __str__(self):
         return self.user_readable_description()
@@ -194,6 +202,96 @@ class AbstractSplitRule():
         """
         self._state = state
 
+    @classmethod
+    def get_min_level(cls) -> int:
+        """
+        Rule should only be applied beginning from that level
+        :return:
+        """
+        return cls._min_level
+
+    @classmethod
+    def get_max_level(cls) -> int:
+        """
+        Rule should only be applied beginning from that level
+        :return:
+        """
+        return cls._max_level
+
+
+    @classmethod
+    def get_whitelist_attribute_indices(cls) -> Optional[typing.List[int]]:
+        """
+        If given, the rule may ONLY be applied to these indices
+        if its none we whitelist every attribute
+        :return:
+        """
+        return cls._whitelist_attribute_indices
+
+    @classmethod
+    def get_blacklist_attribute_indices(cls) -> Optional[typing.List[int]]:
+        """
+        If given, the rule may NOT be applied to these indices
+        if its none we blacklist nothing
+        :return:
+        """
+        return cls._blacklist_attribute_indices
+
+    @classmethod
+    def build_with_restrictions(cls,
+                                whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]]=None,
+                                blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]]=None,
+                                min_level: int = 0,
+                                max_level: int = sys.maxsize):
+        """
+        Will generate the rule class as type with given restrictions
+        :param whitelist_attribute_indices: If set, the rule will ONLY be applied to indices not involving the given list
+        :param blacklist_attribute_indices: If set, the rule will NOT be applied to indices not involving the given list
+        :param min_level: Rule will not be applied before this tree level (starting from 0 for head)
+        :param max_level: Will not be applied AFTER that rule (including)
+        :return:
+        """
+        assert min_level >= 0 and min_level <= max_level, "0 <= min_level <= max_level (Code: 8347982374)"
+        assert not (blacklist_attribute_indices is not None and whitelist_attribute_indices is not None), \
+            "Blacklist and whitelist cannot be used together. If you want both ways, " \
+            "just add a second rule (Code: 213123231)"
+
+        t = type(cls.__mro__[0].__class__.__name__, (cls,), {
+            '_whitelist_attribute_indices': whitelist_attribute_indices,
+            '_blacklist_attribute_indices': blacklist_attribute_indices,
+            '_min_level': min_level,
+            '_max_level': max_level
+        })
+
+        return t
+
+    def _check_rule_applicable_to_attribute_index(self, index: int):
+        """
+        Check if whitelist or blacklist restrict access to that attribute
+        :param index:
+        :return:
+        """
+        whitelist = self.get_whitelist_attribute_indices()
+        blacklist = self.get_blacklist_attribute_indices()
+
+        if self.get_tree() is not None:
+
+            if (whitelist is not None and isinstance(whitelist[0], str)) or \
+                    (blacklist is not None and isinstance(blacklist[0], str)):
+
+                index = self.get_tree().get_attribute_names()[index]
+
+
+
+        if whitelist is not None:
+            return index in whitelist
+
+        if blacklist is not None:
+            return index not in blacklist
+
+        return True
+
+
     def get_state(self) -> Optional[typing.Dict[str, any]]:
         return self._state
 
@@ -205,11 +303,11 @@ class AbstractNumericalSplit(AbstractSplitRule):
 
     def _get_attribute_candidates(self) -> typing.List[int]:
         """
-        Returns a list of attribute / feature indices that Split Rule is apllicable at
+        Returns a list of attribute / feature indices that Split Rule is applicable to
         """
         candidates = []
         for i, t in enumerate(self.get_tree().get_attribute_types()):
-            if t == 'numerical':
+            if t == 'numerical' and self._check_rule_applicable_to_attribute_index(index=i):
                 candidates.append(i)
 
         return candidates
@@ -222,12 +320,12 @@ class AbstractCategoricalSplit(AbstractSplitRule):
 
     def _get_attribute_candidates(self) -> typing.List[int]:
         """
-        Returns a list of attribute / feature indices that Split Rule is apllicable at
+        Returns a list of attribute / feature indices that Split Rule is applicable to
         """
         candidates = []
         attr_types = self.get_tree().get_attribute_types()
-        for i, t in enumerate(self.get_tree().get_attribute_types()):
-            if t == 'categorical':
+        for i, t in enumerate(attr_types):
+            if t == 'categorical' and self._check_rule_applicable_to_attribute_index(index=i):
                 candidates.append(i)
 
         return candidates
@@ -373,6 +471,160 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
         indices = self.get_split_attribute_indices()
         return (self.get_tree().get_attribute_names()[indices[0]],
                 self.get_tree().get_attribute_names()[indices[1]])
+
+
+class ThreeAttributeSplitMixin(AbstractSplitRule):
+    """
+    This is just a helper that deals with extracting the necessary data (including none indices)
+    over exactly three attributes to easen up some repeated works
+    """
+
+    def _get_best_split(self):
+        node = self.get_node()
+        node_data = node.get_data()
+        data_indices = node.get_data_indices()
+        supported_cols = self._get_attribute_candidates()
+
+        if len(supported_cols) < 3:
+            return None
+
+        # node_dummy = node.__class__(tree=node.get_tree(), assigned_data_indices=node.get_data_indices())
+        best_score = -float("inf")
+        best_children = []
+        best_state = {}
+
+        # iterate over all attributes that are available
+        # will iterate over two attribute indices where each pair is only regarded exactly once
+        for i in range(len(supported_cols)):
+            for j in range(i + 1, len(supported_cols)):
+                for z in range(len(supported_cols)):
+                    attr_idx1 = supported_cols[i]
+                    attr_idx2 = supported_cols[j]
+                    attr_idx3 = supported_cols[z]
+                    col_data_1 = node_data[:, attr_idx1]
+                    col_data_2 = node_data[:, attr_idx2]
+                    col_data_3 = node_data[:, attr_idx3]
+                    null_indexer_1 = self._get_col_none_indexer(column=col_data_1)
+                    null_indexer_2 = self._get_col_none_indexer(column=col_data_2)
+                    null_indexer_3 = self._get_col_none_indexer(column=col_data_3)
+                    non_null_indexer_1 = ~null_indexer_1
+                    non_null_indexer_2 = ~null_indexer_2
+                    non_null_indexer_3 = ~null_indexer_3
+                    non_null_indexer_1_2_3 = non_null_indexer_1 & non_null_indexer_2 & non_null_indexer_3
+
+                    if np.any(non_null_indexer_1_2_3):
+                        # get indexer for child node data assignments
+                        rets = self._get_children_indexer_and_state(data_values_left=col_data_1[non_null_indexer_1_2_3],
+                                                                    data_values_middle=col_data_2[non_null_indexer_1_2_3],
+                                                                    data_values_right=col_data_3[non_null_indexer_1_2_3]
+                                                                    )
+
+                        if not isinstance(rets, typing.List):
+                            logging.getLogger(__package__).warning(f"Returning only one split for a split rule "
+                                                                   f"is deprecated"
+                                                                   f"but {self.__class__.mro()[0]} does."
+                                                                   f"if you just want to return a single split, "
+                                                                   f"just return [(config, [nodes...])]. Fixing "
+                                                                   f"that for you"
+                                                                   f"Code (345563425)")
+                            rets = [rets]
+
+                        # a valid split occured?
+                        for ret in rets:
+                            curr_child_indices = []
+                            if ret is not None:
+                                null_indexer_1_2_3 = ~non_null_indexer_1_2_3
+                                non_null_indices = data_indices[non_null_indexer_1_2_3]
+                                has_null_entries = np.any(null_indexer_1_2_3)
+                                state, assignments = ret
+
+                                assert isinstance(state, typing.Dict), "State mus be a dict (Code: 345345)"
+                                assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
+                                                                              "a tuple or None (Code: 45645645)"
+                                assert len(assignments) >= 2, "A split has to generate at least " \
+                                                              "two child nodes(" \
+                                                              "Code: 23423423423)"
+
+                                # collect data indices for each node
+                                has_empty_child = False
+                                for child_assignment in assignments:
+                                    assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(
+                                        np.bool), \
+                                        "Assignments have to be a numpy array of type bool (Code: 234234056)"
+
+                                    if not np.any(child_assignment):
+                                        has_empty_child = True
+                                        break
+
+                                    curr_child_indices.append(non_null_indices[child_assignment])
+
+                                    if has_null_entries:
+                                        curr_child_indices[-1] = np.append(curr_child_indices[-1],
+                                                                           data_indices[null_indexer_1_2_3])
+
+                                # check if we have an empty child
+                                # atm we do not want to accept that -> ignore
+                                if not has_empty_child:
+                                    child_nodes = [node.create_child_node(assigned_data_indices=indices)
+                                                   for indices in curr_child_indices]
+
+                                    state['split_attribute_indices'] = (attr_idx1, attr_idx2, attr_idx3)
+                                    self.set_child_nodes(child_nodes=child_nodes)
+                                    self.set_state(state)
+                                    score = self.get_information_measure()(parent_node=self.get_node())
+
+                                    if score > best_score:
+                                        best_score = score
+                                        best_children = self.get_child_nodes()
+                                        best_state = state
+
+                    # check if we scored something at all
+                    if best_score > -float('inf'):
+                        self.set_state(best_state)
+                        return best_score, best_children
+
+        # otherwise we just don't have something to show
+        return None
+
+    @abstractmethod
+    def _get_children_indexer_and_state(self,
+                                        data_values_left: np.ndarray,
+                                        data_values_middle: np.ndarray,
+                                        data_values_right: np.ndarray) -> Optional[
+                                            typing.List[typing.Tuple[typing.Dict,
+                                                         typing.Tuple[np.ndarray]]]]:
+        """
+
+        :param data_values_left:
+        :param data_values_middle:
+        :param data_right:
+        :return: state, tuple of child indices
+        """
+        pass
+
+    def get_split_attribute_indices(self) -> typing.Tuple[int, int, int]:
+        """
+        Will return the used attributes' split index
+        raises some Exception if split is not initialized
+        :return:
+        """
+        assert self.get_state() is not None, "Split is not initialized, hence it has not split attribute " \
+                                             "(Code: 34233756446)"
+        state = self.get_state()
+        if 'split_attribute_indices' not in state:
+            raise Exception("There is no valid split index set in state, this is a programming error! (Code: 3422534)")
+
+        return self.get_state()['split_attribute_indices']
+
+    def get_split_attribute_names(self) -> typing.Tuple[str, str, str]:
+        """
+        Just a convenience method that returns the names of the split attribute
+        :return:
+        """
+        indices = self.get_split_attribute_indices()
+        return (self.get_tree().get_attribute_names()[indices[0]],
+                self.get_tree().get_attribute_names()[indices[1]],
+                self.get_tree().get_attribute_names()[indices[2]])
 
 
 class OneAttributeSplitMixin(AbstractSplitRule):
@@ -1382,7 +1634,132 @@ class FixedChainRule(AbstractSplitRule):
         rule = type(cls.__mro__[0].__name__, (cls,), {'_name': name,
                                                       '_rules_and_expected_indices': split_rules,
                                                       '_attribute_names': target_node.get_tree().get_attribute_names(),
-
                                                       })
 
         return rule
+
+
+class MultiplicativeSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit):
+    """
+    Splits on attribute1 * attribute2 < attribute3
+    """
+    def get_edge_labels(self) -> typing.List[str]:
+        attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
+
+        return [f"{attr_name_1} * {attr_name_2} < {attr_name_3}",
+                f"{attr_name_1} * {attr_name_2} ≥ {attr_name_3}"]
+
+    def user_readable_description(self) -> str:
+        state = self.get_state()
+        if state is not None:
+            attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
+            return f"{attr_name_1} * {attr_name_2} < " \
+                   f"{attr_name_3}"
+        else:
+            return "Multiplicative smaller than split is not initialized"
+
+    def explain_split(self, sample: np.ndarray) -> str:
+        state = self.get_state()
+        if state is not None:
+            attr_idx_1, attr_idx_2, attr_idx_3 = self.get_split_attribute_indices()
+            attr1 = sample[attr_idx_1]
+            attr2 = sample[attr_idx_2]
+            attr3 = sample[attr_idx_3]
+
+            attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
+
+            if attr1 is None:
+                return f"Attribute \"{attr_name_1}\" is not available, hence assigned to both children"
+            elif attr2 is None:
+                return f"Attribute \"{attr_name_2}\" is not available, hence assigned to both children"
+            elif attr3 is None:
+                return f"Attribute \"{attr_name_3}\" is not available, hence assigned to both children"
+            else:
+                if attr_idx_1 * attr_idx_2 < attr_idx_3:
+                    return f"{attr_name_1} * {attr_name_2} < {attr_name_3}, hence assigned to left child"
+                else:
+                    return f"{attr_name_1} * {attr_name_2} ≥ {attr_name_3}, hence assigned to right child"
+
+        else:
+            raise Exception("Multiplicative smaller than split is not initialized, hence "
+                            "cannot explain a decision (Code: 3453454)")
+
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List[int]:
+        attr_idx_1, attr_idx_2, attr_idx_3 = self.get_split_attribute_indices()
+        if sample[attr_idx_1] * sample[attr_idx_2] < attr_idx_3:
+            return [0]
+        else:
+            return [1]
+
+    def _get_children_indexer_and_state(self,
+                                        data_values_left: np.ndarray,
+                                        data_values_middle: np.ndarray,
+                                        data_values_right: np.ndarray) -> Optional[
+                                            typing.List[typing.Tuple[typing.Dict,
+                                                         typing.Tuple[np.ndarray]]]]:
+
+        left_indices = (data_values_left * data_values_left) < data_values_right
+        return [{}, (left_indices, ~left_indices)]
+
+
+class MultiplicativeAdditiveSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit):
+    """
+    Splits on attribute1 + attribute2 < attribute3
+    """
+    def get_edge_labels(self) -> typing.List[str]:
+        attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
+
+        return [f"{attr_name_1} + {attr_name_2} < {attr_name_3}",
+                f"{attr_name_1} + {attr_name_2} ≥ {attr_name_3}"]
+
+    def user_readable_description(self) -> str:
+        state = self.get_state()
+        if state is not None:
+            attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
+            return f"{attr_name_1} + {attr_name_2} < " \
+                   f"{attr_name_3}"
+        else:
+            return "Multiplicative smaller than split is not initialized"
+
+    def explain_split(self, sample: np.ndarray) -> str:
+        state = self.get_state()
+        if state is not None:
+            attr_idx_1, attr_idx_2, attr_idx_3 = self.get_split_attribute_indices()
+            attr1 = sample[attr_idx_1]
+            attr2 = sample[attr_idx_2]
+            attr3 = sample[attr_idx_3]
+
+            attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
+
+            if attr1 is None:
+                return f"Attribute \"{attr_name_1}\" is not available, hence assigned to both children"
+            elif attr2 is None:
+                return f"Attribute \"{attr_name_2}\" is not available, hence assigned to both children"
+            elif attr3 is None:
+                return f"Attribute \"{attr_name_3}\" is not available, hence assigned to both children"
+            else:
+                if attr_idx_1 * attr_idx_2 < attr_idx_3:
+                    return f"{attr_name_1} + {attr_name_2} < {attr_name_3}, hence assigned to left child"
+                else:
+                    return f"{attr_name_1} + {attr_name_2} ≥ {attr_name_3}, hence assigned to right child"
+
+        else:
+            raise Exception("Multiplicative smaller than split is not initialized, hence "
+                            "cannot explain a decision (Code: 23423423524)")
+
+    def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List[int]:
+        attr_idx_1, attr_idx_2, attr_idx_3 = self.get_split_attribute_indices()
+        if sample[attr_idx_1] * sample[attr_idx_2] < attr_idx_3:
+            return [0]
+        else:
+            return [1]
+
+    def _get_children_indexer_and_state(self,
+                                        data_values_left: np.ndarray,
+                                        data_values_middle: np.ndarray,
+                                        data_values_right: np.ndarray) -> Optional[
+                                            typing.List[typing.Tuple[typing.Dict,
+                                                         typing.Tuple[np.ndarray]]]]:
+
+        left_indices = (data_values_left + data_values_left) < data_values_right
+        return [{}, (left_indices, ~left_indices)]

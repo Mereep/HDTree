@@ -219,7 +219,8 @@ class AbstractHDTree(ABC):
             if child.is_leaf():
                 leafs.append(child)
             else:
-                childs += self._follow_for_sample_to_leafs(start_node=child, sample=sample)
+                childs += self._follow_for_sample_to_leafs(start_node=child,
+                                                           sample=sample)
 
         return leafs
 
@@ -266,7 +267,9 @@ class AbstractHDTree(ABC):
 
                 # split the node
                 min_samples = 1 if not self._min_samples_at_leaf else self._min_samples_at_leaf
-                self._split_node(node_to_split=node_to_split, min_samples_leaf=min_samples)
+                self._split_node(node_to_split=node_to_split,
+                                 level=level,
+                                 min_samples_leaf=min_samples)
 
                 # collect children of node the nodes if any
                 children_of_node = node_to_split.get_children()
@@ -285,15 +288,21 @@ class AbstractHDTree(ABC):
 
         self._is_fit = True
 
-    def _split_node(self, node_to_split: Node, min_samples_leaf: int= 1):
+    def _split_node(self, node_to_split: Node,  level: int, min_samples_leaf: int= 1):
         """
         Does a node split
         :param node_to_split:
-        :param min_samples_leaf:
+        :param min_samples_leaf: ignore splits that produces leafs with less than that
+        :param level: Current level we are within the corresponding tree (Counting from 0 for head)
         :return:
         """
         splits = []
         for split_type in self._allowed_splits:
+
+            # check if we want to apply the rule to the level at all
+            if level < split_type.get_min_level() or level > split_type.get_max_level():
+                continue
+
             splitter = split_type(node=node_to_split)
             score = splitter()
             if score is not None:
@@ -339,6 +348,7 @@ class AbstractHDTree(ABC):
                 clean_nodes += self.get_clean_nodes(min_score=min_score, node=child, early_break=early_break)
 
         return clean_nodes
+
     def _create_node_for_data_indices(self, data_indices: typing.List[int]) -> Node:
         """
         Creates a node for given data indices
@@ -392,7 +402,7 @@ class AbstractHDTree(ABC):
             return False, "There has to be at least one sample and at least one Attribute (Code: 4723984723894)"
 
         # create attribute names if not given
-        if not self._attribute_names:
+        if self._attribute_names is None:
             self._attribute_names = [f"Attribute {i + 1}" for i in range(0, data.shape[1])]
 
         # check if enough attribute names given
