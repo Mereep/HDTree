@@ -48,7 +48,7 @@ class Node:
     def get_parent(self) -> Optional['Node']:
         return self._parent
 
-    def set_split_rule(self, rule: AbstractSplitRule):
+    def set_split_rule(self, rule: Optional[AbstractSplitRule]):
         """
         Sets the nodes split rule 
         """
@@ -106,6 +106,13 @@ class Node:
             return self._split_rule.get_child_nodes()
         else:
             return None
+
+    def make_leaf(self):
+        """
+        Effectively removes the split rule and children
+        :return:
+        """
+        self.set_split_rule(rule=None)
 
     def __str__(self):
         children = "no children" if self.get_children() is None else f"{len(self.get_children())} children"

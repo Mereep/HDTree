@@ -14,13 +14,11 @@
 # @email: richard.vogel@hs-mittweida.de
 # @created: 12.08.2019
 """
-import typing
 from typing import Optional
 from abc import ABC, abstractmethod
 from .node import Node
 import numpy as np
 from collections import Counter
-import math
 
 
 class AbstractInformationMeasure(ABC):
@@ -34,7 +32,7 @@ class AbstractInformationMeasure(ABC):
     @abstractmethod
     def calculate_for_children(self, parent_node: Node) -> Optional[float]:
         """
-        Calculate pureness of the node using some (if possible)
+        Calculate pureness of the node using (if possible)
         """
         pass
 
@@ -66,8 +64,8 @@ class AbstractInformationMeasure(ABC):
         if val is None:
             return val
 
-        assert val >= 0 and val <= 1., f"_calculate_for_nodes has to return a value between [0..1] but " \
-                                       f"returned {val} (Code: 33273928)"
+        assert val > -1e-5 and val < 1. + 1e-5, f"_calculate_for_nodes has to return a value between [0..1] but " \
+                                                f"returned {val} (Code: 33273928)"
 
         return val
 
@@ -126,9 +124,7 @@ class EntropyMeasure(AbstractInformationMeasure):
         if child_nodes is None:
             child_nodes = []
 
-        node: Node = None
         # calculate accuracy for each node
-
         n_total_samples = sum(len(node.get_labels()) for node in child_nodes)
         pureness_childs = 0.
 

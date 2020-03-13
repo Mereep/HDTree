@@ -15,12 +15,15 @@
 # @created: 03.10.2019
 """
 import unittest
-from hd_tree_classes.split_rule import *
-from hd_tree_classes.information_measure import *
-from hd_tree_classes.hdtree import HDTreeClassifier
+from hdtree.hd_tree_classes.split_rule import *
+from hdtree.hd_tree_classes.information_measure import *
+from hdtree.hd_tree_classes.hdtree import HDTreeClassifier
 import pandas as pd
 import numpy as np
 import typing
+import os
+from os.path import join as pjoin
+
 
 class RulesTester(unittest.TestCase):
 
@@ -135,13 +138,456 @@ class RulesTester(unittest.TestCase):
                     continue
 
                 rule = node.get_split_rule()
-                self.assertFalse(level == 0 and isinstance(rule, TenQuantileSplit), "Tenquantile split"
+                self.assertFalse(level == 0 and isinstance(rule, TenQuantileSplit), "Ten Quantile split"
                                                                                     " should not be first level")
                 self.assertFalse(level > 0 and isinstance(rule, TwentyQuantileSplit), "Twenty Quantile split "
                                                                                       "should be only in first level" )
 
+    def test_merge_quantile_split(self):
+        split1 = TwentyQuantileSplit(node=None)
+        split1._state = {
+            'split_value': 1.,
+            'quantile': 2,
+            'split_attribute_indices': [1]
+        }
+        split2 = TenQuantileSplit(node=None)
+        split2._state = {
+            'split_value': 0.5,
+            'quantile': 1,
+            'split_attribute_indices': [1]
+        }
+
+        # check addition of two Quantile Splits
+
+
+        # ... direction 1
+        split_combine = split1 + split2
+        self.assertIsInstance(split_combine, TwentyQuantileSplit, "Split should downcast to twenty quantile")
+        self.assertEqual(split_combine.get_state()['split_value'], 0.5, "Value should be the lower of both")
+
+        # ... direction 2 (Kommunikativ)
+        split_combine = split2 + split1
+        self.assertIsInstance(split_combine, TwentyQuantileSplit, "Split should downcast to twenty quantile")
+        self.assertEqual(split_combine.get_state()['split_value'], 0.5, "Value should be the lower of both")
+
+        # non-working split
+        split_random = SingleCategorySplit(None)
+        split_random.set_state({'split_attribute_indices': [1]})
+
+        split_combine = split2 + split_random
+        self.assertEqual(split_combine, (split2, split_random))
+
+    def test_merge_close_to_median_split(self):
+
+        # test split 2 inside
+        split1 = CloseToMedianSplit(node=None)
+        split1.set_state({'median': 2, 'stdev': 1, 'split_attribute_indices': [1]})
+
+        split2 = CloseToMedianSplit(node=None)
+        split2.set_state({'median': 2.1, 'stdev': 0.2, 'split_attribute_indices': [1]})
+
+        new_split = split1 + split2
+
+        self.assertIsInstance(new_split, CloseToMedianSplit, "Should produce exactly one Median Split")
+        self.assertEqual(2.1, new_split.get_state()['median'], "Should be split 2s Median")
+
+        # test split 2 hanging out right
+        split2.set_state({'median': 2.1, 'stdev': 1, 'split_attribute_indices': [1]})
+        new_split = split1 + split2
+        expected_median = (2.1+2) / 2
+        expected_stdev = 2 * (expected_median - (split2.get_state()['median'] - 0.5 * split2.get_state()['stdev']))
+
+        self.assertIsInstance(new_split, CloseToMedianSplit, "Should produce exactly one Median Split")
+        self.assertEqual(expected_median, new_split.get_state()['median'], "Median should adapt to new range")
+        self.assertAlmostEqual(expected_stdev, new_split.get_state()['stdev'], 5, "Standard Dev should "
+                                                                                  "adapt to new range")
+
+        # test split 2 hanging out left
+        split2.set_state({'median': 1.9, 'stdev': 1, 'split_attribute_indices': [1]})
+        new_split = split1 + split2
+        expected_median = (1.9 + 2.) / 2
+        expected_stdev = 2 * (expected_median - (split1.get_state()['median'] - 0.5 * split1.get_state()['stdev']))
+
+        self.assertIsInstance(new_split, CloseToMedianSplit, "Should produce exactly one Median Split")
+        self.assertEqual(expected_median, new_split.get_state()['median'], "Median should adapt to new range")
+        self.assertAlmostEqual(expected_stdev, new_split.get_state()['stdev'], 5, "Standard Dev should "
+                                                                                  "adapt to new range")
+
+        # ... eating quantile split (im inside interval)
+        split3 = TenQuantileSplit(node=None)
+        split3.set_state({'split_value': 2})
+        new_split = split1 + split2
+
+        self.assertIsInstance(new_split, CloseToMedianSplit, "Close to Median Split should reduce Quantile split")
+
+        # ... merging quantile split (I hang out right of interval)
+        split4 = TenQuantileSplit(node=None)
+        split4.set_state({'split_value': 2, 'split_attribute_indices': [1, 2]})
+        new_split = split1 + split4
+        expected_median = ((split1.get_state()['median'] - split1.get_state()['stdev'] * 0.5) + 2) / 2
+        expected_stdev = (2 - expected_median)
+        self.assertIsInstance(new_split, CloseToMedianSplit, "Close to Median Split should reduce Quantile split")
+        self.assertEqual(expected_median, new_split.get_state()['median'], "Close to Median Split "
+                                                                           "should be 2")
+        self.assertEqual(expected_stdev, new_split.get_state()['stdev'], "stdev should adapt correctly")
+
+    def test_merge_fixed_split(self):
+
+        # eat quantile split
+        split1 = TwentyQuantileSplit(node=None)
+        split1._state = {
+            'split_value': 1.,
+            'quantile': 2,
+            'split_attribute_indices': [1]
+        }
+
+        split2 = FixedValueSplit(node=None)
+        split2._state = {
+            'value': 0.3,
+            'split_attribute_indices': [1]
+        }
+
+        split_merge = split1 + split2
+
+        self.assertIsInstance(split_merge, FixedValueSplit, "Split should downcast to a fixed split")
+        self.assertEqual(split_merge.get_state()['value'], 0.3, "Value should be as defined")
+
+        # check edge case being a string
+        split3 = FixedValueSplit(node=None)
+        split3._state = {
+            'value': 'a',
+            'split_attribute_indices': [1]
+        }
+        split_merge = split3 + split1
+        self.assertEqual(split_merge, (split3, split1, ), "Should not cast together")
+
+        # eat close to median split
+        split4 = CloseToMedianSplit(node=None)
+        split4._state = {
+            'median': 0.3,
+            'stdev': 1,
+            'split_attribute_indices': [1]
+        }
+
+        new_split = split4 + split2
+        self.assertIsInstance(new_split, FixedValueSplit)
+
+    def test_merge_range_split(self):
+
+        # consume RangeSplit
+        split1 = TenQuantileRangeSplit(node=None)
+        split2 = TenQuantileRangeSplit(node=None)
+
+        split1._state = {'lower_bound': 1,
+                         'upper_bound': 2,
+                         'split_attribute_indices': [2]}
+
+        split2._state = {'lower_bound': 1.2,
+                         'upper_bound': 1.4,
+                         'split_attribute_indices': [2]
+                         }
+
+        merge = split1 + split2
+
+        self.assertIsInstance(merge, AbstractQuantileRangeSplit)
+        self.assertEqual(merge.get_upper_bound(), split2.get_upper_bound())
+        self.assertEqual(merge.get_lower_bound(), split2.get_lower_bound())
+
+        # consume CloseToMedianSplit
+        split3 = CloseToMedianSplit(node=None)
+        split3._state = {'median': 1.5,
+                         'stdev': 3,
+                         'split_attribute_indices': [2]}
+
+        merge = split1 + split3
+        self.assertIsInstance(merge, AbstractQuantileRangeSplit)
+        self.assertEqual(merge.get_upper_bound(), split1.get_upper_bound())
+        self.assertEqual(merge.get_lower_bound(), split1.get_lower_bound())
+
+        # consume QuantileSplit
+        split4 = TenQuantileSplit(node=None)
+        split4._state = {'split_value': 3,
+                         'split_attribute_indices': [2]}
+
+        merge = split1 + split4
+        self.assertIsInstance(merge, AbstractQuantileRangeSplit)
+        self.assertEqual(merge.get_upper_bound(), split1.get_upper_bound())
+        self.assertEqual(merge.get_lower_bound(), split1.get_lower_bound())
+
+    def test_simplify_rules(self):
+        split1 = TwentyQuantileSplit(node=None)
+        split1._state = {
+            'split_value': 1.,
+            'quantile': 2,
+            'split_attribute_indices': [1]
+        }
+
+        split2 = FixedValueSplit(node=None)
+        split2._state = {
+            'value': 0.3,
+            'split_attribute_indices': [1]
+        }
+
+        split3 = SingleCategorySplit(None)
+        split3.set_state({'split_attribute_indices': [4]})
+
+        split4 = TwentyQuantileSplit(node=None)
+        split4._state = {
+            'split_value': 1.,
+            'quantile': 2,
+            'split_attribute_indices': [2]
+        }
+
+        split5 = TwentyQuantileSplit(node=None)
+        split5._state = {
+            'split_value': 0.,
+            'quantile': 2,
+            'split_attribute_indices': [2]
+        }
+
+        splits = [split1, split2, split3, split4, split5]
+
+        rules_simple = simplify_rules(splits)
+
+        self.assertEqual(3, len(rules_simple), "Two rules should be eaten")
+
+    def test_merge_with_sample(self):
+        #### Quantile + Quantile
+        split1 = TenQuantileSplit(node=None)
+        split2 = TenQuantileSplit(node=None)
+
+        split1._state = {'split_value': 1,
+                         'split_attribute_indices': [2]}
+
+        split2._state = {'split_value': 2,
+                         'split_attribute_indices': [2]
+                         }
+
+        rules = [split1, split2]
+        # case I: Below
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 1.-1e-10]))
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit, "is at lower bound --> should be merged "
+                                                           "to quantile split again")
+        # case II: Between
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 1.5]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, MergedQuantileRangeSplit, "is inside range -> should be MergedQuantileSplit")
+        self.assertEqual(rule.get_upper_bound(), 2)
+        self.assertEqual(rule.get_lower_bound(), 1)
+
+        # case II: Above
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 2.]))
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit, "is at upper bound --> should be merged to "
+                                                           "quantile split again")
+        self.assertEqual(rule.get_split_value(), 2)
+
+        ### QuantileRange + QuantileRange
+        higher = TenQuantileRangeSplit(node=None)
+        lower = TenQuantileRangeSplit(node=None)
+
+        higher._state = {'upper_bound': 6,
+                         'lower_bound': 3,
+                         'split_attribute_indices': [2]}
+
+        lower._state = {'upper_bound': 4,
+                        'lower_bound': 0,
+                        'split_attribute_indices': [2]}
+
+        rules = [lower, higher]
+        # test case 1: Sample in both
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 3.5]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample is within both -> one range split")
+        self.assertEqual(rule.get_lower_bound(), higher.get_lower_bound(), "New split should start above higher split")
+        self.assertEqual(rule.get_upper_bound(), lower.get_upper_bound(), "New split should end below lower split")
+
+        # test case 2: Sample in lower only
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 2]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample should be only in lower range")
+        self.assertEqual(rule.get_lower_bound(), lower.get_lower_bound(), "New split should start at loweesz pos")
+        self.assertEqual(rule.get_upper_bound(), higher.get_lower_bound(), "New split ")
+
+        # test case V: Sample in upper only
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 5.]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample only in higher range")
+        self.assertEqual(rule.get_lower_bound(), lower.get_upper_bound(), "Should be the lowest thing after the "
+                                                                          "thing we know its NOT inside")
+        self.assertEqual(rule.get_upper_bound(), higher.get_upper_bound(), "highest thing")
+
+        # test case 3: Sample above all
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 7]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit, "Sample is above all -> Quantile Split")
+        self.assertEqual(rule.get_split_value(), higher.get_upper_bound(), "Split should separate on highest spot")
+
+        # test case 4: Sample below all
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., -1.]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit, "Sample is below all -> Quantile Split")
+        self.assertEqual(rule.get_split_value(), lower.get_lower_bound(), "Sample smaller than smallest")
+
+        # test case 6: No rule overalp and sample between
+        higher._state = {'upper_bound': 1,
+                         'lower_bound': 0,
+                         'split_attribute_indices': [2]}
+
+        lower._state = {'upper_bound': -1,
+                        'lower_bound': -2,
+                        'split_attribute_indices': [2]}
+
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., -0.5]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample between two ranges -> RangeSplit")
+        self.assertEqual(rule.get_lower_bound(), lower.get_upper_bound(), "Should start at end of lower rule")
+        self.assertEqual(rule.get_upper_bound(), higher.get_lower_bound(), "Should end at start of upper rule")
+
+        ### QuantileRange + Range
+
+        # ..Class I: Overlap
+        split1 = TenQuantileSplit(node=None)
+        split1._state = {'split_value': 5,
+                         'split_attribute_indices': [2]}
+
+        split2 = TenQuantileRangeSplit(node=None)
+
+        split2._state = {'upper_bound': 6,
+                         'lower_bound': 3,
+                         'split_attribute_indices': [2]}
+
+        # ... I.I below
+        rules = [split1, split2]
+
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 0]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit, "Sample is below all -> Quantile Split")
+        self.assertEqual(rule.get_split_value(), split2.get_lower_bound(), "Sample smaller than smallest")
+
+        # ... I.II in split below quantile split
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample in range")
+        self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
+        self.assertEqual(rule.get_upper_bound(), split1.get_split_value())
+
+        # .... I.III above quantile and inside range
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 5.5]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertEqual(rule.get_lower_bound(), split1.get_split_value())
+        self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
+
+        # .... I.IV above all
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 7.2]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit)
+        self.assertEqual(rule.get_split_value(), split2.get_upper_bound())
+
+        # Case II: Quantile split BELOW RangeSplit
+        split1 = TenQuantileSplit(node=None)
+        split1._state = {'split_value': 1,
+                         'split_attribute_indices': [2]}
+
+        split2 = TenQuantileRangeSplit(node=None)
+
+        split2._state = {'upper_bound': 6,
+                         'lower_bound': 3,
+                         'split_attribute_indices': [2]}
+
+        rules = [split1, split2]
+
+        #  II.I sample below quantile split
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 0]))
+        self.assertEqual(len(new_rules), 1)
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit)
+        self.assertEqual(rule.get_split_value(), split1.get_split_value())
+
+        # II.II sample between both
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 2]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertEqual(rule.get_lower_bound(), split1.get_split_value())
+        self.assertEqual(rule.get_upper_bound(), split2.get_lower_bound())
+
+        #  II.III in range
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
+        self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
+
+
+        #  II.IV above all
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 100]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit)
+        self.assertEqual(rule.get_split_value(), split2.get_upper_bound())
+
+        # Case III quantile split above
+        split1 = TenQuantileSplit(node=None)
+        split1._state = {'split_value': 8,
+                         'split_attribute_indices': [2]}
+
+        split2 = TenQuantileRangeSplit(node=None)
+
+        split2._state = {'upper_bound': 6,
+                         'lower_bound': 3,
+                         'split_attribute_indices': [2]}
+
+        rules = [split1, split2]
+
+        #  III.I sample below quantile split
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 2]))
+        self.assertEqual(len(new_rules), 1)
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit)
+        self.assertEqual(rule.get_split_value(), split2.get_lower_bound())
+
+        #  II.II in range
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
+        self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
+
+        #  II.III above range below quantile
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 7]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertEqual(rule.get_lower_bound(), split2.get_upper_bound())
+        self.assertEqual(rule.get_upper_bound(), split1.get_split_value())
+
+        #  II.IV all
+        new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 9]))
+        self.assertEqual(len(new_rules), 1, "Rules should merge")
+        rule = new_rules[0]
+        self.assertIsInstance(rule, AbstractQuantileSplit)
+        self.assertEqual(rule.get_split_value(), split1.get_split_value())
+
+
     def _get_data(self) -> typing.Tuple[np.ndarray, np.ndarray, typing.List[str]]:
-        df_primitives = pd.read_csv('data/test_data.csv')
+        df_primitives = pd.read_csv(pjoin(os.path.dirname(os.path.abspath(__file__)),
+                                          'data/test_data.csv'))
         df_primitives.fillna(0, inplace=True)
         primitives = pd.get_dummies(df_primitives.loc[:, 'primitive_type'])
         df_primitives = df_primitives.join(primitives)
@@ -151,3 +597,27 @@ class RulesTester(unittest.TestCase):
         x_primitives = df_primitives.iloc[:, 1:-1].values
 
         return x_primitives, y_primitives, df_primitives.columns[1:-1]
+
+    def test_fixed_chain_rule(self):
+        X, y, cols = self._get_data()
+
+        tree_params = dict(allowed_splits=[TenQuantileSplit],
+                           max_levels=3,
+                           min_samples_at_leaf=10, attribute_names=cols,
+                           information_measure=EntropyMeasure())
+
+        tree_1 = HDTreeClassifier(**tree_params)
+        tree_1.fit(X, y)
+
+        node_1 = tree_1.get_node_for_tree_walk([1, 0, 1])
+        rule_new_1 = FixedChainRule.from_node(node_1, name="Tester")
+
+        tree_params_2 = dict(allowed_splits=[rule_new_1],
+                       max_levels=3,
+                       attribute_names=cols,
+                       min_samples_at_leaf=10, information_measure=EntropyMeasure())
+
+        tree_2 = HDTreeClassifier(**tree_params_2)
+        tree_2.fit(X, y)
+        graph = tree_2.generate_dot_graph()
+

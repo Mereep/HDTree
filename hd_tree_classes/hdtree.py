@@ -21,10 +21,9 @@ from abc import ABC, abstractmethod
 from .node import Node
 import numpy as np
 from .information_measure import AbstractInformationMeasure
-from .split_rule import AbstractSplitRule, LessThanHalfOfSplit
+from .split_rule import AbstractSplitRule
 import logging
 from collections import Counter
-import graphviz
 from graphviz import Digraph
 
 
@@ -47,9 +46,33 @@ class AbstractHDTree(ABC):
         self._allowed_splits = allowed_splits
         self._information_measure = information_measure
         self._verbose = verbose
-        self._attribute_types: typing.List[str] = None
-        self._attribute_names = attribute_names
+        self._attribute_types: Optional[typing.List[str]] = None
+        self._attribute_names = [*attribute_names] if attribute_names is not None else None
         self._is_fit = False
+
+    def __copy__(self):
+        """
+        Will rebuilt the tree
+        this operation is slow, since it will actually refit the model
+
+        @TODO
+        implement smarter structure-copy
+        :return:
+        """
+        params  = self.get_params()
+        cpy = self.__class__(**params)
+        cpy.fit(self.get_train_data(), self.get_train_labels())
+        return cpy
+
+    def map_attribute_indices_to_names(self, indices: typing.List[int]) -> typing.List[str]:
+        """
+        Will transform a list of attribute indices to its corresponding names
+        :param indices:
+        :return:
+        """
+        assert max(indices) < len(self.get_attribute_names()) and min(indices) >= 0, "Attribute indices out of bounds " \
+                                                                                     "(Code: 3824728934)"
+        return [*map(lambda idx: self.get_attribute_names()[idx], indices)]
 
     def get_params(self, deep=True):
         return {
@@ -58,17 +81,37 @@ class AbstractHDTree(ABC):
             'attribute_names': self._attribute_names,
             'max_levels': self._max_levels,
             'min_samples_at_leaf': self._min_samples_at_leaf,
-            'verbose': self._verbose
+            'verbose': self._verbose,
         }
 
     def set_params(self, **kwargs):
-        print(kwargs)
         self._allowed_splits = kwargs['allowed_splits']
         self._information_measure = kwargs['information_measure']
         self._attribute_names = kwargs['attribute_names']
         self._max_levels = kwargs['max_levels']
         self._min_samples_at_leaf = kwargs['min_samples_at_leaf']
         self._verbose = kwargs['verbose']
+
+    def get_allowed_splits(self) -> typing.List[typing.Type[AbstractSplitRule]]:
+        """
+        Gets a list of the currently allowed splits for that tree
+        :return:
+        """
+        return self._allowed_splits
+
+    def remove_allowed_split(self, split: typing.Type[AbstractSplitRule]):
+        """
+        Removes the given split type from allowed split
+        if possible (otherwise does nothing)
+        :param split:
+        :return:
+        """
+        matches = [*map(lambda a_split: split is a_split, self.get_allowed_splits())]
+        if any(matches):
+            del self._allowed_splits[matches.index(True)]
+
+    def add_allowed_split(self, split: typing.Type[AbstractSplitRule]):
+        self._allowed_splits.append(split)
 
     def is_fit(self) -> bool:
         return self._is_fit
@@ -106,7 +149,7 @@ class AbstractHDTree(ABC):
         assert self.is_fit(), "Tree is fit on data, hence cannot predict (Code: 2842094823)"
         assert len(X.shape) == 2, "Data has to be in format n_samples x n_features (Code: 234234234)"
         assert X.shape[1] == len(self.get_attribute_names()), "Amount of labels has to match amount of " \
-                                                                 "features (Code: 23842039482)"
+                                                              "features (Code: 23842039482)"
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -146,7 +189,7 @@ class AbstractHDTree(ABC):
 
         for i, child in enumerate(childs):
             path = [child]
-            ret += f"Explanation {i+1}:\n"
+            ret += f"Explanation {i + 1}:\n"
 
             while child.get_parent() is not None:
                 path.append(child.get_parent())
@@ -155,7 +198,7 @@ class AbstractHDTree(ABC):
             path.reverse()
 
             for step, node in enumerate(path):
-                ret += f"Step {step+1}: {node.explain_split(sample=sample)}\n"
+                ret += f"Step {step + 1}: {node.explain_split(sample=sample)}\n"
 
             ret += '---------------------------------\n'
         return ret
@@ -164,6 +207,8 @@ class AbstractHDTree(ABC):
         """
         Will return the node that is the target after walking
         the edges specified
+
+        [0,0,1,2] will follow left most node, left most node, second node, third node respectievely
         :param edge_indices:
         :return:
         """
@@ -171,8 +216,9 @@ class AbstractHDTree(ABC):
 
         for i, edge_index in enumerate(edge_indices):
             childs = curr_node.get_children()
-            assert edge_index >= 0 and edge_index < len(childs), f"Node {curr_node} has no child {edge_index} " \
-                                                                 f"(Walk step {i+1})"
+            assert childs is not None and edge_index >= 0 and edge_index < len(childs), \
+                f"Node {curr_node} has no child {edge_index} or is a leaf" \
+                f"(Walk step {i + 1}) (Code: 8473894753894)"
             curr_node = childs[edge_index]
 
         return curr_node
@@ -235,6 +281,7 @@ class AbstractHDTree(ABC):
         self._labels = y
         self._train_data = X
         self._cached_predictions: typing.Dict = {}
+        self._cached_uniques: typing.Dict[int, typing.Set] = {}
         self.classes_ = [*np.unique(y)]
 
         status, msg = self._check_preconditions()
@@ -249,7 +296,7 @@ class AbstractHDTree(ABC):
         level = 0
 
         while True:
-            self._output_message(f"Splitting level {level+1}")
+            self._output_message(f"Splitting level {level + 1}")
             collected_children = []
 
             for node_to_split in current_nodes_to_split:
@@ -257,7 +304,7 @@ class AbstractHDTree(ABC):
 
                 # check if we want to split that node
                 # we do not if we only have one sample or <= requested minimum amount of samples
-                #if (self._min_samples_at_leaf is not None and self._min_samples_at_leaf >= n_node_samples) or \
+                # if (self._min_samples_at_leaf is not None and self._min_samples_at_leaf >= n_node_samples) or \
                 #  n_node_samples <= 1:
                 #    continue
 
@@ -288,7 +335,7 @@ class AbstractHDTree(ABC):
 
         self._is_fit = True
 
-    def _split_node(self, node_to_split: Node,  level: int, min_samples_leaf: int= 1):
+    def _split_node(self, node_to_split: Node, level: int, min_samples_leaf: int = 1):
         """
         Does a node split
         :param node_to_split:
@@ -317,14 +364,46 @@ class AbstractHDTree(ABC):
                     if not node_too_small:
                         splits.append((score, splitter))
 
+        # get the best split
+        # be aware that splits may be prioritized using their specificity value
         if len(splits) > 0:
-            best_split = sorted(splits, key=lambda data: data[0], reverse=True)[0][1]
+            best_val = None
+            best_split = None
+            best_specificity = None
+            for score_split in sorted(splits, key=lambda data: data[0], reverse=True):
+                score, split = score_split
+                # check if a more specific rule may have same score
+                if best_val is None or score == best_val:
+                    if best_specificity is None or split.get_specificity() > best_specificity:
+                        best_val = score
+                        best_split = split
+                        best_specificity = split.get_specificity()
+                else:  # since data is sorted if we reduce in performance we cannot do better -> leave to not eat more cycles
+                    break
+
             node_to_split.set_split_rule(best_split)
 
+    def get_all_nodes_below_node(self, node: Optional[Node]):
+        """
+        Will return all nodes under a given node
+        if node is None will use head instead
+        :param node:
+        :return:
+        """
+        curr_node = node or self._node_head
+        nodes = []
+        childs = curr_node.get_children() or []
 
-    def get_clean_nodes(self, min_score: float=1., early_break: bool=True, node: Node=None):
+        for child in childs:
+            nodes.append(child)
+            nodes += self.get_all_nodes_below_node(node=child)
+
+        return nodes
+
+    def get_clean_nodes(self, min_score: float = 1., early_break: bool = True, node: Node = None):
         """
         Will return all nodes in the tree that have at least the given score
+
         :param min_score:
         :param node:
         :param early_break: Do not progress into childs if node meets requirement
@@ -334,6 +413,7 @@ class AbstractHDTree(ABC):
             curr_node = self._node_head
         else:
             curr_node = node
+
         clean_nodes = []
 
         childs = curr_node.get_children() or []
@@ -366,15 +446,21 @@ class AbstractHDTree(ABC):
         attributes = []
         data = self.get_train_data()
         attribute = "other"
+        numeric_kinds = {'b',  # boolean
+                         'u',  # unsigned integer
+                         'i',  # signed integer
+                         'f',  # floats
+                         'c'}
+
         for i in range(data.shape[1]):
             vals = data[:, i]
-
+            none_type = type(None)
             # categorical?
-            if np.all([isinstance(val, (str, type(None))) or np.isnan(val) for val in vals]):
-                attribute = 'categorical'
-            # numeric?
-            elif np.all([isinstance(val, (type(None), float, int,  np.nan)) or np.isnan(val) for val in vals]):
+            if vals.dtype.kind in numeric_kinds:
                 attribute = 'numerical'
+            # numeric?
+            elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
+                attribute = 'categorical'
 
             attributes.append(attribute)
 
@@ -393,7 +479,7 @@ class AbstractHDTree(ABC):
             return False, "Amount of labels does not comply with amount of data handed over (Code: 39847298374)"
 
         if not len(data.shape) == 2:
-            return False, "Input data has to be in format (n_samples, n_features) (Code: 83472839472398)"
+            return False, f"Input data has to be in format (n_samples, n_features) but was {data.shape} (Code: 83472839472398)"
 
         if not len(labels.shape) == 1:
             return False, "Labels have to be in format (n_samples) (Code: 23874092374)"
@@ -446,18 +532,28 @@ class AbstractHDTree(ABC):
         """
         pass
 
-    def generate_dot_graph(self) -> Digraph:
+    def generate_dot_graph(self, label_lookup: Optional[typing.Dict[any, str]] = None,
+                           show_trace_of_sample: Optional[np.ndarray] = None) -> Digraph:
         """
         Returns the graphical representation of the tree
-        you can directkly output it into jupyter notebook envs
+        you can directly output it into jupyter notebook envs
         or save it to disk in a variety of file formats
         only works fully for classification at the moment
+
+        :param label_lookup: replaces labels with given values for vizualization (like 0 -> No, 1 -> Yes)
+        :param show_trace_of_sample: if sample is given the nodes this sample flows through will be marked visually
         :return:
         """
         assert self.is_fit(), "The decision tree is not fit, hence you cannot draw it (Code: 23489723489)"
 
+        if show_trace_of_sample is not None:
+            node_trace = self.extract_node_chain_for_sample(sample=show_trace_of_sample)
+        else:
+            node_trace = []
+
         # generate new dot environment
-        dot = Digraph(comment='Human Decision Tree Export', encoding="utf-8")
+        dot = Digraph(comment='HDTree Export',
+                      encoding="utf-8")
 
         def plot_one_node(node: Node, node_name: str):
             """
@@ -466,15 +562,17 @@ class AbstractHDTree(ABC):
             :param node_name:
             :return:
             """
-            description_text = f"\l Samples:      {node.get_sample_count()}" \
-                               f"\l Score:        {round(node.get_score(), 2)}"
+            description_text = f"\lSamples:      {node.get_sample_count()}" \
+                               f"\lScore:        {round(node.get_score(), 2)}"
 
             rule = node.get_split_rule()
             if rule is not None:
-                description_text += f"\l Rule:   {str.strip(str(rule))}"
+                description_text += f"\lRule: {str.strip(str(rule))}"
 
             if self._supports_classification():
                 labels = node.get_labels()
+                if label_lookup:
+                    labels = [*map(lambda lbl: label_lookup[lbl], labels)]
                 description_text += '\n'
                 labels_cnt = Counter(labels)
                 most_common = labels_cnt.most_common()[0][0]
@@ -484,7 +582,7 @@ class AbstractHDTree(ABC):
                     if most_common == name:
                         description_text += " ✓"
 
-            # color code clean nodes greenish
+            # color-code clean nodes greenish
             cleaness = node.get_score()
             hex_number = hex(255 - int(cleaness * 255))[-2:]
             if hex_number[0] == "x":
@@ -493,17 +591,19 @@ class AbstractHDTree(ABC):
             samples_total = len(self.get_train_labels())
             samples_in_node = len(node.get_data_indices())
 
-            proportion = samples_in_node/samples_total
+            # proportion of all samples within tree that follow the given path
+            proportion = samples_in_node / samples_total
 
             dot.node(node_name,
-                     description_text+'\l ',
+                     description_text + '\l ',
                      shape='box',
-                     style="filled",
+                     style="filled" if node not in node_trace else 'filled,diagonals',
                      fillcolor=f"#{hex_number}ff{hex_number}",
                      margin="0.3",
                      fontname="monospace",
-                     penwidth=str(10*proportion)
-                    )
+                     penwidth=str(10 * proportion),
+                     pencolor='#000000' if node not in node_trace else '#e69c43'
+                     )
 
         # draw head node
         curr_nodes = [(self._node_head, 'Head (Level 0)')]
@@ -531,7 +631,7 @@ class AbstractHDTree(ABC):
                         proportion = samples_in_child / samples_parent
                         dot.edge(parent_node_name, child_node_name,
                                  label=edge_labels[child_num],
-                                 penwidth=str(7*proportion))
+                                 penwidth=str(7 * proportion))
                         new_nodes.append((child, child_node_name))
                         node_number += 1
 
@@ -539,6 +639,39 @@ class AbstractHDTree(ABC):
             level += 1
 
         return dot
+
+    @abstractmethod
+    def _get_prediction_for_node(self, node: Node,
+                                 force_recalculation: bool = False,
+                                 probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
+
+        pass
+
+    def get_possible_decisions_for_node(self, node: Node) -> typing.Set[str]:
+        """
+        Follows the path down to all leafs from the current node
+        and returns all unique decisions that are found
+        :return:
+        """
+        decisions = [self._get_prediction_for_node(node)]
+        nodes_to_evaluate = [node]
+
+        while len(nodes_to_evaluate) > 0:
+            node = nodes_to_evaluate.pop()
+            childs = node.get_children()
+            if childs is not None:
+                nodes_to_evaluate += childs
+            else:
+                decisions += [self._get_prediction_for_node(node)]
+
+        return set(decisions)
+
+    def simplify(self):
+        """
+        Will remove cut branches whose underlying decisions will not change no matter what leaf the sample might end up
+        :return:
+        """
+        raise NotImplementedError()
 
 
 class HDTreeClassifier(AbstractHDTree):
@@ -554,7 +687,7 @@ class HDTreeClassifier(AbstractHDTree):
         # ... or None (we want to gracefully support that by definition!)
         is_str = [isinstance(l, str) or l is None for l in labels]
         if not np.all(is_str):
-            #status = False
+            # status = False
             self._output_message("Warning: Labels for classification "
                                  "should to be of type String. Please explicitly cast if needed "
                                  "(e.g.: labels.astype(np.str)) "
@@ -562,7 +695,7 @@ class HDTreeClassifier(AbstractHDTree):
 
         # labels should not be too much. Basically checking if we are
         # really talking about a classification problem
-        #if len(np.unique(labels)) > len(data) * 0.8:
+        # if len(np.unique(labels)) > len(data) * 0.8:
         #    status = False
         #    msg = "There seem to be unresonable many labels for classification (over 80%) Are you sure? (Code: 34723984)"
 
@@ -579,9 +712,11 @@ class HDTreeClassifier(AbstractHDTree):
         self.classes_: Optional[typing.List[str]] = None
         super().__init__(*args, **kwargs)
 
+    @classmethod
     def _supports_classification(cls):
         return True
 
+    @classmethod
     def _supports_regression(cls):
         return False
 
@@ -599,15 +734,15 @@ class HDTreeClassifier(AbstractHDTree):
         if childs:
             i = 1
             for child in childs:
-                #str += f"{level}.{i}:\n"
-                str += f'{self.print_node(node=child, level=level+1, child_no=i)}'
+                # str += f"{level}.{i}:\n"
+                str += f'{self.print_node(node=child, level=level + 1, child_no=i)}'
                 i += 1
 
         return str
 
     def _get_prediction_for_node(self, node: Node,
-                                 force_recalculation: bool=False,
-                                 probabilistic: bool=False) -> typing.Union[str, typing.List[float]]:
+                                 force_recalculation: bool = False,
+                                 probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
         """
         Will return the value that a sample would be assigned if designated to that specific node
         :param node:
@@ -619,7 +754,6 @@ class HDTreeClassifier(AbstractHDTree):
             is_cached = node in self._cached_predictions
 
             if not is_cached or force_recalculation:
-
                 labels = node.get_labels()
                 self._cached_predictions[node] = Counter(labels).most_common()[0][0]
 
@@ -627,7 +761,7 @@ class HDTreeClassifier(AbstractHDTree):
         else:
             # list of popabilities is ordered by self.classes_
             labels = node.get_labels()
-            rets:typing.List[float] = []
+            rets: typing.List[float] = []
             vals = Counter(labels)
 
             for cls in self.classes_:
@@ -635,25 +769,49 @@ class HDTreeClassifier(AbstractHDTree):
 
             return rets
 
+    def get_unique_values_for_attribute(self, attr_index) -> Optional[typing.Set]:
+        """
+        Returns unque values for an attribute (excluding None)
+        if values are floating the function will return None
+
+        if the uniques are proportionally more than half of the samples than we will not consider it valid
+        for the Fixed Value Split, since it doesn't seem too categorical
+
+        Same happens if we just have more than 50 Values
+
+        @TODO make those two parameters of the split
+        :param attr_index: 
+        :return: 
+        """
+        if not attr_index in self._cached_uniques:
+            data = self.get_train_data()[:, attr_index]
+            uniques = set(data)
+            uniques.discard(None)
+            if len(uniques) < 0.5 * len(data) or len(uniques) > 50:
+                self._cached_uniques[attr_index] = uniques
+            else:
+                self._cached_uniques[attr_index] = None
+
+        return self._cached_uniques[attr_index]
+
     def _predict_sample(self, sample: np.ndarray,
-                        probabilistic: bool=False) -> typing.Union[str, typing.List[float]]:
+                        probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
 
         target_nodes = self._follow_for_sample_to_leafs(start_node=self._node_head,
                                                         sample=sample)
-        if len(target_nodes) > 1:
-            raise Exception("Predicting on missing values is not supported atm (Code: 23847238)")
+        # if len(target_nodes) > 1:
+        #    raise Exception("Predicting on missing values is not supported atm (Code: 23847238)")
 
         if not probabilistic:
 
             node_vals = []
 
-            # retrieve value for every node
+            # retrieve values for every node
             for target_node in target_nodes:
                 node_vals.append((target_node.get_sample_count(),
                                   self._get_prediction_for_node(node=target_node)))
 
-
-            #sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
+            # sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
             classes = [node_val[1] for node_val in node_vals]
 
             class_occurrences = Counter(classes).most_common()
@@ -665,7 +823,7 @@ class HDTreeClassifier(AbstractHDTree):
 
     def predict(self,
                 X: np.ndarray,
-                probabilistic: bool=False):
+                probabilistic: bool = False):
 
         self._check_predict_preconditions(X=X)
 
@@ -675,8 +833,9 @@ class HDTreeClassifier(AbstractHDTree):
             res = np.ndarray(shape=(len(X),), dtype=np.object)
 
         for i in range(len(X)):
-            pred = self._predict_sample(sample=X[i],
-                                 probabilistic=probabilistic)
+            pred = self._predict_sample(
+                sample=X[i],
+                probabilistic=probabilistic)
             if probabilistic:
                 res[i, :] = pred
             else:
@@ -698,3 +857,103 @@ class HDTreeClassifier(AbstractHDTree):
 
     def fit(self, X, y):
         super().fit(X=X, y=y)
+
+    def get_feature_count(self) -> int:
+        """
+        Returns the amount of features that this tree has access too (shape[1])
+        :return:
+        """
+        return len(self.get_attribute_names())
+
+    def get_all_nodes(self):
+        """
+        Will return a list of all nodes within tree
+
+        :return:
+        """
+        assert self.is_fit(), "The tree is not fitted yet, hence has no Nodes inside (Code: 3298479823)"
+
+        # list of nodes still in need to be expanded
+        nodes_to_expand: typing.List[Node] = [self._node_head]
+
+        # list of already expaned nodes
+        expanded_nodes: typing.List[Node] = []
+
+        while len(nodes_to_expand) > 0:
+            # expand current nodes (get children)
+            child_nodes: typing.List[Node] = []
+            for node in nodes_to_expand:
+                childs = node.get_children()
+                if childs is not None:
+                    child_nodes += childs
+                    expanded_nodes.append(node)
+
+            nodes_to_expand = child_nodes
+
+        return expanded_nodes
+
+    def compute_feature_importances(self) -> np.ndarray:
+        """
+        Tries to estimate the current classifiers feature importance
+        using the increase of pureness given the current rules and used attributes
+        sum of importances will be equal to 1.
+
+        :return:
+        """
+        if not self.is_fit():
+            raise Exception("Feature importance is evaluated using a fitted tree, please fit it first" \
+                            " (Code: 3284723984)")
+
+        importances = np.zeros(shape=(self.get_feature_count()), dtype=np.float)
+        nodes = self.get_all_nodes()
+
+        if len(nodes) > 0 and nodes[0].get_split_rule().is_initialized():
+            max_samples = np.max([node.get_sample_count() for node in nodes])
+            for node in nodes:
+                if not node.is_leaf() or node.get_split_rule().is_initialized():
+                    sample_cnt = node.get_sample_count()
+                    score = node.get_score()
+                    used_attributes = node.get_split_rule().get_split_attribute_indices()
+                    child_score = self.get_information_measure().calculate_for_children(node)
+                    # calculate how much that attribute(s) contributed to the increase in score
+                    # (parent to childs)
+                    relative_increase = (sample_cnt / max_samples) * (child_score - score)
+                    importances[[*used_attributes]] += relative_increase
+
+            importances /= np.sum(importances)
+
+        else:
+            importances[:] = 1. / len(importances)
+
+        return importances
+
+    @property
+    def feature_importances_(self) -> np.ndarray:
+        """
+        Just a property that makes the tree sklearn compatible
+        @see compute_feature_importances
+        :return:
+        """
+        return self.compute_feature_importances()
+
+    def simplify(self, return_copy: bool = False) -> 'HDTreeClassifier':
+        """
+        Will prune the tree until there are no branches left which would result in the same decisions
+        independently from the sample
+
+        :return:
+        """
+
+        me = self if not return_copy else self.__copy__()
+        leafs = [node for node in me.get_all_nodes_below_node(node=None) if node.is_leaf()]
+        for leaf in leafs:
+            parent = leaf.get_parent()
+
+            # check if we try to cut head node
+            if parent is not None:
+                decisions = me.get_possible_decisions_for_node(node=parent)
+                if len(decisions) == 1:
+                    # we can could that guy
+                    parent.make_leaf()
+
+        return me
