@@ -947,16 +947,21 @@ class HDTreeClassifier(AbstractHDTree):
         """
 
         me = self if not return_copy else self.__copy__()
-        leafs = [node for node in me.get_all_nodes_below_node(node=None) if node.is_leaf()]
-        for leaf in leafs:
-            parent = leaf.get_parent()
 
-            # check if we try to cut head node
-            if parent is not None:
-                decisions = me.get_possible_decisions_for_node(node=parent)
-                if len(decisions) == 1:
-                    # we can could that guy
-                    parent.make_leaf()
+        changed_happened = True
+        while changed_happened:
+            changed_happened=False
+            leafs = [node for node in me.get_all_nodes_below_node(node=None) if node.is_leaf()]
+            for leaf in leafs:
+                parent = leaf.get_parent()
+
+                # check if we try to cut head node
+                if parent is not None:
+                    decisions = me.get_possible_decisions_for_node(node=parent)
+                    if len(decisions) == 1:
+                        # we can could that guy
+                        parent.make_leaf()
+                        changed_happened = True
 
         return me
 
