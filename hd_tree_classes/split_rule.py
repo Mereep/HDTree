@@ -500,7 +500,8 @@ class AbstractSplitRule(ABC):
         """
         pass
 
-    def __add__(self, other: 'AbstractSplitRule', use_attribute_names: bool=True, sample: Optional[np.ndarray] = None) -> Optional[Union['AbstractSplitRule',
+    def __add__(self, other: 'AbstractSplitRule', use_attribute_names: bool=True,
+                sample: Optional[np.ndarray] = None, try_reverse: bool=True) -> Optional[Union['AbstractSplitRule',
                                                                     Tuple['AbstractSplitRule',
                                                                           'AbstractSplitRule']]]:
         """
@@ -528,7 +529,7 @@ class AbstractSplitRule(ABC):
 
             if can_merge:
                 res = self._merge(other, sample=sample)
-                if res is None:
+                if res is None and try_reverse:
                     # try other way around
                     res = other._merge(self, sample=sample)
 
@@ -2768,15 +2769,15 @@ def simplify_rules(rules: List[AbstractSplitRule],
             sample_for_i = sample
         for j in range(i+1, len(curr_rules)):
             if model_to_sample is not None:
-                tree_j = rules[i].get_tree()
+                tree_j = rules[j].get_tree()
                 sample_for_j = sample if not model_to_sample else model_to_sample[tree_j]
             else:
                 sample_for_j = sample
 
-            rule_new = rules[i].__add__(rules[j], sample=sample_for_i)
+            rule_new = rules[i].__add__(rules[j], sample=sample_for_i, try_reverse=False)
 
-            if rule_new == (rules[i], rules[j]):
-                rule_new = rules[j].__add__(rules[i], sample=sample_for_j)
+            if rule_new == (rules[i], rules[j]):  # did not merge try to switch
+                rule_new = rules[j].__add__(rules[i], sample=sample_for_j, try_reverse=False)
 
             # hit (we could merge)
             if isinstance(rule_new, AbstractSplitRule):
