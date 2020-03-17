@@ -250,6 +250,7 @@ class AbstractHDTree(ABC):
     def _follow_for_sample_to_leafs(self, start_node: Node, sample: np.ndarray):
         """
         Follows the tree recursively down to the leafs returning all leaf-nodes the sample belongs to
+
         :param start_node:
         :param sample:
         :return:
@@ -383,7 +384,7 @@ class AbstractHDTree(ABC):
 
             node_to_split.set_split_rule(best_split)
 
-    def get_all_nodes_below_node(self, node: Optional[Node]):
+    def get_all_nodes_below_node(self, node: Optional[Node]=None):
         """
         Will return all nodes under a given node
         if node is None will use head instead
@@ -641,9 +642,9 @@ class AbstractHDTree(ABC):
         return dot
 
     @abstractmethod
-    def _get_prediction_for_node(self, node: Node,
-                                 force_recalculation: bool = False,
-                                 probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
+    def get_prediction_for_node(self, node: Node,
+                                force_recalculation: bool = False,
+                                probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
 
         pass
 
@@ -653,7 +654,7 @@ class AbstractHDTree(ABC):
         and returns all unique decisions that are found
         :return:
         """
-        decisions = [self._get_prediction_for_node(node)]
+        decisions = [self.get_prediction_for_node(node)]
         nodes_to_evaluate = [node]
 
         while len(nodes_to_evaluate) > 0:
@@ -662,7 +663,7 @@ class AbstractHDTree(ABC):
             if childs is not None:
                 nodes_to_evaluate += childs
             else:
-                decisions += [self._get_prediction_for_node(node)]
+                decisions += [self.get_prediction_for_node(node)]
 
         return set(decisions)
 
@@ -740,11 +741,12 @@ class HDTreeClassifier(AbstractHDTree):
 
         return str
 
-    def _get_prediction_for_node(self, node: Node,
-                                 force_recalculation: bool = False,
-                                 probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
+    def get_prediction_for_node(self, node: Node,
+                                force_recalculation: bool = False,
+                                probabilistic: bool = False) -> typing.Union[str, typing.List[float]]:
         """
         Will return the value that a sample would be assigned if designated to that specific node
+
         :param node:
         :param probabilistic: if true will return the |most_common| / |samples|
         :return:
@@ -809,7 +811,7 @@ class HDTreeClassifier(AbstractHDTree):
             # retrieve values for every node
             for target_node in target_nodes:
                 node_vals.append((target_node.get_sample_count(),
-                                  self._get_prediction_for_node(node=target_node)))
+                                  self.get_prediction_for_node(node=target_node)))
 
             # sum_of_relevant_samples = sum([node_val[0] for node_val in node_vals])
             classes = [node_val[1] for node_val in node_vals]
@@ -819,7 +821,7 @@ class HDTreeClassifier(AbstractHDTree):
 
             return most_likely_class
         else:
-            return self._get_prediction_for_node(node=target_nodes[0], probabilistic=True)
+            return self.get_prediction_for_node(node=target_nodes[0], probabilistic=True)
 
     def predict(self,
                 X: np.ndarray,
@@ -957,3 +959,29 @@ class HDTreeClassifier(AbstractHDTree):
                     parent.make_leaf()
 
         return me
+
+    @staticmethod
+    def follow_node_to_root(node: Node) -> typing.List[Node]:
+        """
+        Will return the chain from root to current leaf
+        in order root -> node (without node itself)
+
+        :param node:
+        :return:
+        """
+        ret = []
+        parent = node.get_parent()
+        while parent:
+            ret.append(parent)
+            parent = parent.get_parent()
+
+        ret.reverse()
+
+        return ret
+
+    def get_head(self) -> Node:
+        """
+        Gets the first node inside
+        :return:
+        """
+        return self._node_head

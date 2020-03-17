@@ -1199,6 +1199,14 @@ class FixedValueSplit(OneAttributeSplitMixin):
                 if is_float and lower <= fixed_val < upper:
                     return self.__copy__()
 
+            if isinstance(other, FixedValueSplit):
+                if fixed_val == other.get_state()['value']:
+                    return self.__copy__()
+                else:
+                    logging.getLogger().warning("You try to merge to fixed Values having different values. "
+                                                "This can never work. Do not call this function directly! "
+                                                "I will ignore that. (Code: 348230948)")
+
         else: # we have a sample
             # We always are more specific on intervals etc. so we always return oneself
             if isinstance(other, AbstractQuantileSplit) or isinstance(other, CloseToMedianSplit) or isinstance(other, AbstractQuantileRangeSplit):
@@ -1237,10 +1245,10 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                 return f"\"Value for {attr_name}\" is not available, hence assigned to all children"
             else:
                 if abs(val - median) <= 0.5 * stddev:
-                    return f"\"{attr_name}\" is close to groups' median of  " \
+                    return f"{attr_name} is close to groups' median of  " \
                            f"{round(median, 2)} (± ½ × σ = {0.5 * round(stddev, 2)})"
                 else:
-                    return f"\"{attr_name}\" is outside of groups' median of  " \
+                    return f"{attr_name} is outside of groups' median of  " \
                            f"{round(median, 2)} (± ½ × σ = {0.5 * round(stddev, 2)})"
         else:
             raise Exception("Close To Median Split not initialized, hence, "
@@ -1389,16 +1397,16 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
             upper = self.get_upper_bound()
 
             if val is None:
-                return f"\"Value for {attr_name}\" is not available, hence assigned to all children"
+                return f"alue for {attr_name} is not available, hence assigned to all children"
             else:
                 if lower <= val < upper:
-                    return f"\"{attr_name}\" is INSIDE range [{lower:.2f}, ... {upper:.2f}["
+                    return f"{attr_name} is INSIDE range [{lower:.2f}, ... {upper:.2f}["
                 else:
                     if val < lower:
                         way = 'below'
                     else:
                         way = 'above'
-                    return f"\"{attr_name}\" is OUTSIDE range [{lower:.2f}, ... {upper:.2f}[ ({val:.2f} is {way} range)"
+                    return f"{attr_name} is OUTSIDE range [{lower:.2f}, ... {upper:.2f}[ ({val:.2f} is {way} range)"
         else:
             raise Exception("Close To Median Split not initialized, hence, "
                             "cannot explain a decision (Code: 234723948723498237)")
@@ -1710,14 +1718,14 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             attr_name_1, attr_name_2 = self.get_split_attribute_names()
 
             if attr1 is None:
-                return f"Attribute \"{attr_name_1}\" is not available, hence assigned to both children"
+                return f"Attribute {attr_name_1} is not available, hence assigned to both children"
             elif attr2 is None:
-                return f"Attribute \"{attr_name_2}\" is not available, hence assigned to both children"
+                return f"Attribute {attr_name_2} is not available, hence assigned to both children"
             else:
                 if attr1 < attr2:
-                    return f"\"{attr_name_1}\" < \"{attr_name_2}\""
+                    return f"{attr_name_1} < {attr_name_2}"
                 else:
-                    return f"\"{attr_name_1}\" ≥ \"{attr_name_2}\""
+                    return f"{attr_name_1} ≥ {attr_name_2}"
 
         else:
             raise Exception("Smaller Than Split not initialized, hence, "
@@ -1781,14 +1789,14 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
             attr_name_1, attr_name_2 = self.get_split_attribute_names()
 
             if attr1 is None:
-                return f"Attribute \"{attr_name_1}\" is not available, hence assigned to both children"
+                return f"Attribute {attr_name_1} is not available, hence assigned to both children"
             elif attr2 is None:
-                return f"Attribute \"{attr_name_2}\" is not available, hence assigned to both children"
+                return f"Attribute {attr_name_2} is not available, hence assigned to both children"
             else:
                 if attr1 < 0.5 * attr2:
-                    return f"\"{attr_name_1}\" < ½ × {attr_name_2}"
+                    return f"{attr_name_1} < ½ × {attr_name_2}"
                 else:
-                    return f"\"{attr_name_1}\" ≥ ½ × {attr_name_2}"
+                    return f"{attr_name_1} ≥ ½ × {attr_name_2}"
 
         else:
             raise Exception("Less Than Half Of Split not initialized, hence, "
@@ -1836,7 +1844,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         if state is not None:
             attr_name = self.get_split_attribute_name()
             lookup = state['label_to_node_idx_lookup']
-            return f"Split on categorical attribute \"{attr_name}\" with possible values: {', '.join([*lookup.keys()])}"
+            return f"Split on categorical attribute {attr_name} with possible values: {', '.join([*lookup.keys()])}"
         else:
             return "Single Category Split is not evaluated"
 
@@ -1860,13 +1868,13 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
             lookup = state['label_to_node_idx_lookup']
 
             if attr is None:
-                return f"\"{attr_name}\" is not available, hence assigned to all child nodes"
+                return f"{attr_name} is not available, hence assigned to all child nodes"
             elif attr not in lookup:  # we did not split on that specific val
-                return f"\"{attr_name}\" with value {attr} was not available at that stage during training, " \
+                return f"{attr_name} with value {attr} was not available at that stage during training, " \
                        f"hence assigned to all childs"
             else:
                 attr_node = lookup[attr]
-                return f"\"{attr_name}\" has value \"{attr}\", hence assigned it to node number {attr_node+1}"
+                return f"{attr_name} has value {attr}, hence assigned it to node number {attr_node+1}"
 
         else:
             raise Exception("Single Category Split Split not initialized, hence, "
@@ -1952,13 +1960,13 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
         quantile_val = state['quantile']
         quantile_str = f"{quantile_val + 1}/{self.quantile_count + 1}"
         if attr is None:
-            return f"Attribute \"{attr_name}\" is not available"
+            return f"Attribute {attr_name} is not available"
         else:
             if attr < split_val:
-                return f"\"{attr_name}\" < " \
+                return f"{attr_name} < " \
                        f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
             else:
-                return f"\"{attr_name}\" ≥ " \
+                return f"{attr_name} ≥ " \
                        f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
 
     def get_edge_labels(self):
@@ -2178,19 +2186,19 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
             attr_name_1, attr_name_2 = self.get_split_attribute_names()
 
             if attr1 is None:
-                return f"Attribute \"{attr_name_1}\" is not available"
+                return f"Attribute {attr_name_1} is not available"
             elif attr2 is None:
-                return f"Attribute \"{attr_name_2}\" is not available"
+                return f"Attribute {attr_name_2} is not available"
             else:
                 split_val = state['split_value']
                 quantile_val = state['quantile']
                 quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
 
                 if (attr1 * attr2) < split_val:
-                    return f"\"{attr_name_1}\" * < \"{attr_name_2}\" <" \
+                    return f"{attr_name_1} * < {attr_name_2} <" \
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
                 else:
-                    return f"\"{attr_name_1}\" * < \"{attr_name_2}\" ≥ " \
+                    return f"{attr_name_1} * < {attr_name_2} ≥ " \
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             raise Exception("Multiplicative Split is not initialized, hence "
@@ -2306,19 +2314,19 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
             attr_name_1, attr_name_2 = self.get_split_attribute_names()
 
             if attr1 is None:
-                return f"Attribute \"{attr_name_1}\" is not available"
+                return f"Attribute {attr_name_1} is not available"
             elif attr2 is None:
-                return f"Attribute \"{attr_name_2}\" is not available"
+                return f"Attribute {attr_name_2} is not available"
             else:
                 split_val = state['split_value']
                 quantile_val = state['quantile']
                 quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
 
                 if (attr1 * attr2) < split_val:
-                    return f"\"{attr_name_1}\" + < \"{attr_name_1}\" <" \
+                    return f"{attr_name_1} + < {attr_name_1} <" \
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
                 else:
-                    return f"\"{attr_name_1}\" + < \"{attr_name_2}\" ≥ " \
+                    return f"{attr_name_1} + < {attr_name_2} ≥ " \
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             raise Exception("Additive Split is not initialized, hence "
@@ -2602,11 +2610,11 @@ class MultiplicativeSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumerical
             attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
 
             if attr1 is None:
-                return f"Attribute \"{attr_name_1}\" is not available"
+                return f"Attribute {attr_name_1} is not available"
             elif attr2 is None:
-                return f"Attribute \"{attr_name_2}\" is not available"
+                return f"Attribute {attr_name_2} is not available"
             elif attr3 is None:
-                return f"Attribute \"{attr_name_3}\" is not available"
+                return f"Attribute {attr_name_3} is not available"
             else:
                 if attr_idx_1 * attr_idx_2 < attr_idx_3:
                     return f"{attr_name_1} * {attr_name_2} < {attr_name_3}"
@@ -2665,11 +2673,11 @@ class AdditiveSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit)
             attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
 
             if attr1 is None:
-                return f"Attribute \"{attr_name_1}\" is not available"
+                return f"Attribute {attr_name_1} is not available"
             elif attr2 is None:
-                return f"Attribute \"{attr_name_2}\" is not available"
+                return f"Attribute {attr_name_2} is not available"
             elif attr3 is None:
-                return f"Attribute \"{attr_name_3}\" is not available"
+                return f"Attribute {attr_name_3} is not available"
             else:
                 if attr_idx_1 * attr_idx_2 < attr_idx_3:
                     return f"{attr_name_1} + {attr_name_2} < {attr_name_3}"
@@ -2739,6 +2747,7 @@ def simplify_rules(rules: List[AbstractSplitRule],
     Will try to merge rules together to receive a list of more easy rules
     can either supply all samples with @param sample or have each model see another sample by using the mapping
     model_to_sample
+
     :param rules:
     :return:
     """
