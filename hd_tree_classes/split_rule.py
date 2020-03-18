@@ -84,7 +84,6 @@ class AbstractSplitRule(ABC):
         new._is_evaluated = True
         new._child_nodes = other._child_nodes
 
-
         return new
 
     @classmethod
@@ -536,11 +535,11 @@ class AbstractSplitRule(ABC):
                 if res is not None:
                     return res
 
-            return (self, other,)
+            return self, other
         else:
             raise Exception("You can only combine initialized rules (Code: 328749823)")
 
-    def _merge(self, other, sample: Optional[np.ndarray]=None) -> Optional['AbstractSplitRule']:
+    def _merge(self, other, sample: Optional[np.ndarray] = None) -> Optional['AbstractSplitRule']:
         """
         If two rules can be reduced, method should return a rule that combines these two
         don't use this function directly, use +-Operator instead
@@ -1057,7 +1056,6 @@ class FixedValueSplit(OneAttributeSplitMixin):
 
     def get_edge_labels(self) -> typing.List[str]:
         state = self.get_state()
-        attr_name = self.get_split_attribute_name()
         value = state['value']
 
         return [f"is {value}", f"is NOT {value}"]
@@ -1147,6 +1145,10 @@ class FixedValueSplit(OneAttributeSplitMixin):
         """
         self._state['value'] = value
 
+    @check_initialized
+    def get_fixed_val(self) -> Union[str, float, int, typing.Any]:
+        return self.get_state()['value']
+
     def _merge(self, other, sample: Optional[np.ndarray]=None) -> Optional['AbstractSplitRule']:
         """
         :param other:
@@ -1154,7 +1156,7 @@ class FixedValueSplit(OneAttributeSplitMixin):
         """
 
         # check if fixed val is a float
-        fixed_val = self.get_state()['value']
+        fixed_val = self.get_fixed_val()
         is_float = False
         try:
             float(fixed_val)  # will raise if not possible
@@ -1212,9 +1214,30 @@ class FixedValueSplit(OneAttributeSplitMixin):
             # We always are more specific on intervals etc. so we always return oneself
             if isinstance(other, AbstractQuantileSplit) or isinstance(other, CloseToMedianSplit) or isinstance(other, AbstractQuantileRangeSplit):
                 return self.__copy__()
-            else:
-                # this may be an AND-Rule (which is not available at the moment)
-                pass
+            elif isinstance(other, FixedValueSplit):
+                sample_val = sample[self.get_split_attribute_index()]
+                own_val = fixed_val
+                other_val = other.get_fixed_val()
+
+                # case I both are identical -> just eat one rule
+                if own_val == other_val:
+                    return FixedValueSplit.new_from_other(other=self,
+                                                          state={'value': own_val})
+
+                # case II: agrees with self (and not both are the same) -> returns elf
+                elif sample_val == own_val:
+                    return FixedValueSplit.new_from_other(other=self,
+                                                          state={'value': own_val})
+                # case III: agrees only with other
+                elif sample_val == other_val:
+                    return FixedValueSplit.new_from_other(other=other,
+                                                          state={'value': other_val})
+
+                # case IV: disagreeing both
+                else:
+                    # this may be an AND-Rule (which is not available at the moment)
+                    # @TODO add an AND-Rule and connect both
+                    pass
 
         return None
 
@@ -2757,27 +2780,29 @@ def simplify_rules(rules: List[AbstractSplitRule],
     assert not (sample is not None and model_to_sample is not None), "If providing a sample it either always has to be" \
                                                                      "the same sample for each model or there has to" \
                                                                      "be a mapping from rule to model " \
-                                                                     "(mnot both) (Code: 382742839)"
+                                                                     "(not both) (Code: 382742839)"
     curr_rules = [*rules]
 
     # try to match one by one
     for i in range(len(curr_rules)):
         if model_to_sample is not None:
             tree_i = rules[i].get_tree()
-            sample_for_i = sample if not model_to_sample else model_to_sample[tree_i]
+            sample_for_i = model_to_sample[tree_i]
         else:
             sample_for_i = sample
         for j in range(i+1, len(curr_rules)):
             if model_to_sample is not None:
                 tree_j = rules[j].get_tree()
-                sample_for_j = sample if not model_to_sample else model_to_sample[tree_j]
+                sample_for_j = model_to_sample[tree_j]
             else:
                 sample_for_j = sample
 
-            rule_new = rules[i].__add__(rules[j], sample=sample_for_i, try_reverse=False)
+            rule_new = rules[i].__add__(rules[j], sample=sample_for_i, try_reverse=False, use_attribute_names=True)
 
             if rule_new == (rules[i], rules[j]):  # did not merge try to switch
-                rule_new = rules[j].__add__(rules[i], sample=sample_for_j, try_reverse=False)
+                rule_new = rules[j].__add__(rules[i], sample=sample_for_j,
+                                            try_reverse=False,
+                                            use_attribute_names=True)
 
             # hit (we could merge)
             if isinstance(rule_new, AbstractSplitRule):
@@ -2789,6 +2814,6 @@ def simplify_rules(rules: List[AbstractSplitRule],
                 curr_rules.append(rule_new)
 
                 # and start all over
-                return simplify_rules(curr_rules, sample=sample)
+                return simplify_rules(curr_rules, model_to_sample=model_to_sample)
 
     return curr_rules

@@ -621,3 +621,74 @@ class RulesTester(unittest.TestCase):
         tree_2.fit(X, y)
         graph = tree_2.generate_dot_graph()
 
+
+    def test_handpicked_cases(self):
+        """
+        These are just some cases that went wrong while testing
+        :return:
+        """
+
+        # casscade of 3 -> 1
+        data_1, data_2 = np.array([73]),  np.array([55, 73])
+
+        split_3 = TenQuantileSplit(node=None)
+        split_3._state = {
+            'split_value': 68,
+            'quantile': 1,
+            'split_attribute_indices': [0]
+        }
+
+        split_1 = TenQuantileSplit(node=None)
+        split_1._state = {
+            'split_value': 75,
+            'quantile': 1,
+            'split_attribute_indices': [1]
+        }
+
+        split_2 = TenQuantileSplit(node=None)
+        split_2._state = {
+            'split_value': 67,
+            'quantile': 1,
+            'split_attribute_indices': [1]
+        }
+
+        class TreeDummy:
+            def __init__(self, names):
+                self.names = names
+
+            def get_attribute_names(self):
+                return self.names
+
+        class NodeDummy:
+            def __init__(self, names):
+                self.names = names
+                self.tree = TreeDummy(names)
+
+            def get_tree(self):
+                return self.tree
+
+        node_dummy_1 = NodeDummy(['1'])
+        node_dummy_2 = NodeDummy(['0', '1'])
+
+        split_3.get_tree = lambda: node_dummy_1.get_tree()
+        split_1.get_tree = lambda: node_dummy_2.get_tree()
+        split_2.get_tree = lambda: node_dummy_2.get_tree()
+
+        split_3.get_node = lambda: node_dummy_1
+        split_1.get_node = lambda: node_dummy_2
+        split_2.get_node = lambda: node_dummy_2
+
+        lookup = {
+            node_dummy_1.get_tree(): data_1,
+            node_dummy_2.get_tree(): data_2
+        }
+
+        res = simplify_rules([split_1, split_2, split_3], model_to_sample=lookup)
+
+        self.assertEqual(len(res), 1, "Should melt down to one rule")
+        self.assertIsInstance(res[0], AbstractQuantileRangeSplit, "67 split should be eaten completely and the "
+                                                                  "other two should merge to appropriate range")
+        self.assertEqual(res[0].get_state()['lower_bound'], 68)
+        self.assertEqual(res[0].get_state()['upper_bound'], 75)
+
+

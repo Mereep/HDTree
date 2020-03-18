@@ -87,7 +87,7 @@ class RelativeAccuracyMeasure(AbstractInformationMeasure):
         if child_nodes is None:
             child_nodes = []
 
-        node: Node = None
+        node: Optional[Node] = None
         # calculate accuracy for each node
 
         n_total_samples = sum(len(node.get_labels()) for node in child_nodes)

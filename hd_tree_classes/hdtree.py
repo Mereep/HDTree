@@ -773,7 +773,7 @@ class HDTreeClassifier(AbstractHDTree):
 
     def get_unique_values_for_attribute(self, attr_index) -> Optional[typing.Set]:
         """
-        Returns unque values for an attribute (excluding None)
+        Returns unique values for an attribute (excluding None)
         if values are floating the function will return None
 
         if the uniques are proportionally more than half of the samples than we will not consider it valid
@@ -785,7 +785,7 @@ class HDTreeClassifier(AbstractHDTree):
         :param attr_index: 
         :return: 
         """
-        if not attr_index in self._cached_uniques:
+        if attr_index not in self._cached_uniques:
             data = self.get_train_data()[:, attr_index]
             uniques = set(data)
             uniques.discard(None)
