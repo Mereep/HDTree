@@ -110,14 +110,6 @@ class AbstractSplitRule(ABC):
         return self.get_help_text()
 
     @classmethod
-    def get_min_level(cls) -> int:
-        return cls._min_level
-
-    @classmethod
-    def get_max_level(cls) -> int:
-        return cls._max_level
-
-    @classmethod
     def set_min_level(cls, val: int):
         cls._min_level = val
 
@@ -273,7 +265,7 @@ class AbstractSplitRule(ABC):
         pass
 
     @abstractmethod
-    def explain_split(self, sample: np.ndarray) -> str:
+    def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
         """
         Returns human readable description for split decision
         :param sample:
@@ -304,6 +296,7 @@ class AbstractSplitRule(ABC):
 
         assert self.get_child_nodes() is not None and len(self.get_child_nodes()) > 1, "There are no child nodes " \
                                                                                        "attached (Code: 4564567)"
+        return []
 
     @abstractmethod
     def _get_best_split(self) -> typing.Optional[typing.Tuple[float, typing.List['Node']]]:
@@ -725,7 +718,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
     @abstractmethod
     def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args, **kwargs) -> Optional[
         typing.Tuple[typing.Dict,
-                     typing.Tuple[np.ndarray]]]:
+                     typing.Tuple[np.ndarray, ...]]]:
         """
         Returns for each child no
         :param data_values_left:
@@ -1074,7 +1067,7 @@ class FixedValueSplit(OneAttributeSplitMixin):
             val = state['value']
             return f"Split on {attr_name} equals {val}"
 
-    def explain_split(self, sample: np.ndarray) -> str:
+    def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
         state = self.get_state()
         if state is not None:
             value = state['value']
@@ -1255,7 +1248,7 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
         state = self.get_state()
 
         if state is not None:
@@ -1411,7 +1404,10 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                "[Q1|Q2|Q3|Q4|Q5|....]. all pairs of interval boundaries are than evaluated to split the data" \
                "being inside the interval or outside,\n e.g. Age is between 20 and 40"
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
+        hide_sample_specifics = False
+        if 'hide_sample_specifics' in kwargs:
+            hide_sample_specifics = kwargs['hide_sample_specifics']
 
         if self.is_initialized():
             attr_index = self.get_split_attribute_index()
@@ -1430,7 +1426,12 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                         way = 'below'
                     else:
                         way = 'above'
-                    return f"{attr_name} is OUTSIDE range [{lower:.2f}, ... {upper:.2f}[ ({val:.2f} is {way} range)"
+                    if not hide_sample_specifics:
+                        add_sample_specific_text =  f'({val:.2f} is {way} range)'
+                    else:
+                        add_sample_specific_text = ''
+
+                    return f"{attr_name} is OUTSIDE range [{lower:.2f}, ..., {upper:.2f}[{add_sample_specific_text}"
         else:
             raise Exception("Close To Median Split not initialized, hence, "
                             "cannot explain a decision (Code: 234723948723498237)")
@@ -1732,7 +1733,7 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
         attr_name_1, attr_name_2 = self.get_split_attribute_names()
         return [f"{attr_name_1} < {attr_name_2}", f"{attr_name_1} ≥ {attr_name_2}"]
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
         state = self.get_state()
         if state is not None:
             attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
@@ -1803,7 +1804,7 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
         attr_name_1, attr_name_2 = self.get_split_attribute_names()
         return [f"{attr_name_1} < ½ × {attr_name_2}", f"{attr_name_1} ≥ ½ × {attr_name_2}"]
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
         state = self.get_state()
         if state is not None:
             attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
@@ -1883,7 +1884,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
 
         return labels
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
         state = self.get_state()
         if state is not None:
             attr_idx = self.get_split_attribute_index()
@@ -1974,7 +1975,11 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
 
     @check_initialized
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
+        hide_sample_specifics = False
+        if 'hide_sample_specifics' in kwargs:
+            hide_sample_specifics = kwargs['hide_sample_specifics']
+
         state = self.get_state()
         attr_name = self.get_split_attribute_name()
         split_val = state['split_value']
@@ -1986,12 +1991,17 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
         if attr is None:
             return f"Attribute {attr_name} is not available"
         else:
+            if not hide_sample_specifics:
+                sample_specific_text =  f" (=Groups' {quantile_str}. Quantile)"
+            else:
+                sample_specific_text = ''
+
             if attr < split_val:
                 return f"{attr_name} < " \
-                       f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
+                       f"{round(split_val, 2)}{sample_specific_text}"
             else:
                 return f"{attr_name} ≥ " \
-                       f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
+                       f"{round(split_val, 2)}{sample_specific_text}"
 
     def get_edge_labels(self):
         state = self.get_state()
@@ -2200,7 +2210,7 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
         split_val = state['split_value']
         return [f"< {round(split_val, 2)}", f"≥  {round(split_val, 2)}"]
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
         state = self.get_state()
         if state is not None:
             attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
@@ -2219,10 +2229,10 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
                 quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
 
                 if (attr1 * attr2) < split_val:
-                    return f"{attr_name_1} * < {attr_name_2} <" \
+                    return f"{attr_name_1} * {attr_name_2} <" \
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
                 else:
-                    return f"{attr_name_1} * < {attr_name_2} ≥ " \
+                    return f"{attr_name_1} * {attr_name_2} ≥ " \
                            f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             raise Exception("Multiplicative Split is not initialized, hence "
@@ -2328,7 +2338,7 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
         else:
             return "Multiplicative split is not initialized"
 
-    def explain_split(self, sample: np.ndarray):
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
         state = self.get_state()
         if state is not None:
             attr_idx_1, attr_idx_2 = self.get_split_attribute_indices()
@@ -2460,7 +2470,7 @@ class FixedChainRule(AbstractSplitRule):
             rules_str += f'\n  ({i+1}) {rule_str}'
         return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps:" + rules_str
 
-    def explain_split(self, sample: np.ndarray) -> str:
+    def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
         res = self._execute(samples=sample.reshape((1, -1)))[0]
         if res:
             return f"Chain rule \ \'{self._name}\' did pass"
@@ -2623,7 +2633,7 @@ class MultiplicativeSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumerical
         else:
             return "Multiplicative smaller than split is not initialized"
 
-    def explain_split(self, sample: np.ndarray) -> str:
+    def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
         state = self.get_state()
         if state is not None:
             attr_idx_1, attr_idx_2, attr_idx_3 = self.get_split_attribute_indices()
@@ -2686,7 +2696,7 @@ class AdditiveSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit)
         else:
             return "Multiplicative smaller than split is not initialized"
 
-    def explain_split(self, sample: np.ndarray) -> str:
+    def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
         state = self.get_state()
         if state is not None:
             attr_idx_1, attr_idx_2, attr_idx_3 = self.get_split_attribute_indices()
