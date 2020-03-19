@@ -131,5 +131,9 @@ class RulesTester(unittest.TestCase):
                                  [node.get_split_rule().user_readable_description() for node in nodes_cpy if node.get_split_rule() is not None],
                                  'Nodes should expand in same order and be the same things'
                                  )
+
         self.assertTrue(all([node.get_tree() is cpy for node in nodes_cpy]), "node copies should reference to tree copy")
+        self.assertTrue(all([node.get_tree() is tree for node in nodes_tree]), "node originals should reference to original tree")
+        self.assertIs(nodes_cpy[-1].get_parent().get_parent().get_tree(), cpy, 'Parents should link to correct tree')
+        self.assertIs(nodes_tree[-1].get_parent().get_parent().get_tree(), tree, 'Parents should link to correct tree')
 

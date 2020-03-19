@@ -58,7 +58,7 @@ class Node:
         if self.get_split_rule() is not None:
             cpy.set_split_rule(self.get_split_rule().__copy__())
             cpy.get_split_rule().set_node(cpy)
-            cpy.get_split_rule().set_child_nodes(child_nodes=self.get_children(), set_parent=True)
+            cpy.get_split_rule().set_child_nodes(child_nodes=self.get_children())
 
         return cpy
 
@@ -88,9 +88,6 @@ class Node:
         Returns the tree that node belongs to
         """
         return self._tree
-
-    def set_tree(self, tree: 'AbstractHDTree'):
-        self._tree = tree
 
     def get_score(self) -> Optional[float]:
         """

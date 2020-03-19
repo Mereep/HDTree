@@ -89,6 +89,9 @@ class AbstractHDTree(ABC):
                 copy = child_of_cpy.__copy__()
                 # children_cpy = [child.__copy__() for child in childs_of_copy]
                 # copy.set_children(children_cpy)
+                copy.set_parent(curr_node)
+                if copy.get_split_rule() is not None:
+                    copy.get_split_rule().set_node(curr_node)
                 child_copies.append(copy)
 
             if len(child_copies) > 0:

@@ -594,6 +594,7 @@ class AbstractSplitRule(ABC):
 
         clone_instance: AbstractSplitRule = clone_cls(node=node)
         clone_instance.set_state(state=self.get_state().copy())
+        clone_instance._score = self.get_score()
 
         return clone_instance
 
