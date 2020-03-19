@@ -138,7 +138,7 @@ class Node:
         curr_childs = self.get_children()
         assert curr_childs is not None, "You can only have childs if you have a split rule attached (Code: 83472389)"
 
-        self.get_split_rule().set_child_nodes(child_nodes=childs, set_parent=True)
+        self.get_split_rule().set_child_nodes(child_nodes=childs)
 
     def make_leaf(self):
         """

@@ -82,7 +82,6 @@ class AbstractHDTree(ABC):
             # get childs of the current node (if any)
             childs_of_copy = curr_node.get_children() or []
 
-
             # copy all children of the node + set current nodes childs to copies of childs
             child_copies = []
             for child_of_cpy in childs_of_copy:

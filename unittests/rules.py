@@ -621,7 +621,6 @@ class RulesTester(unittest.TestCase):
         tree_2.fit(X, y)
         graph = tree_2.generate_dot_graph()
 
-
     def test_handpicked_cases(self):
         """
         These are just some cases that went wrong while testing
