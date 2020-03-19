@@ -21,6 +21,7 @@ from os.path import join as pjoin
 import unittest
 import os
 from hdtree import *
+from hdtree.hd_tree_classes.hdtree import AbstractHDTree
 
 
 class RulesTester(unittest.TestCase):
@@ -93,3 +94,42 @@ class RulesTester(unittest.TestCase):
         x_primitives = df_primitives.iloc[:, 1:-1].values
 
         return x_primitives, y_primitives, df_primitives.columns[1:-1]
+
+    def test_copy_tree(self):
+        x, y, cols = self._get_data()
+
+        wl_attributes = [0, 2, 3, 1]
+
+        params = dict(allowed_splits=[
+            # SingleCategorySplit,
+            TenQuantileSplit.build_with_restrictions(
+                whitelist_attribute_indices=wl_attributes
+            ),
+        ],
+            information_measure=EntropyMeasure(),
+            max_levels=5,
+            min_samples_at_leaf=None,
+            verbose=False,
+            attribute_names=cols
+        )
+
+        tree = HDTreeClassifier(**params)
+        tree.fit(x, y)
+
+        cpy = tree.__copy__()
+
+        self.assertIsInstance(cpy, AbstractHDTree, "Should return a valid HDTree")
+        self.assertIs(tree.get_train_data(), cpy.get_train_data(), "Data should be referenced over")
+        self.assertIs(tree.get_train_labels(), cpy.get_train_labels(), "Labels should be referenced over")
+
+        nodes_tree = tree.get_all_nodes_below_node(node=None)
+        nodes_cpy = cpy.get_all_nodes_below_node(node=None)
+
+        self.assertEqual(len(nodes_tree), len(nodes_cpy), "There should be the same amount of nodes")
+
+        self.assertSequenceEqual([node.get_split_rule().user_readable_description() for node in nodes_tree if node.get_split_rule() is not None],
+                                 [node.get_split_rule().user_readable_description() for node in nodes_cpy if node.get_split_rule() is not None],
+                                 'Nodes should expand in same order and be the same things'
+                                 )
+        self.assertTrue(all([node.get_tree() is cpy for node in nodes_cpy]), "node copies should reference to tree copy")
+

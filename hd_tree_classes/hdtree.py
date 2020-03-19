@@ -54,15 +54,54 @@ class AbstractHDTree(ABC):
         """
         Will rebuilt the tree
         this operation is slow, since it will actually refit the model
-
-        @TODO
-        implement smarter structure-copy
         :return:
         """
-        params  = self.get_params()
-        cpy = self.__class__(**params)
-        cpy.fit(self.get_train_data(), self.get_train_labels())
-        return cpy
+        params = self.get_params()
+        cpy_tree = self.__class__(**params)
+
+        if not self.is_fit():
+            return cpy_tree
+
+        cpy_tree.prepare_fit(self.get_train_data(), self.get_train_labels())
+
+        _head_node_cpy = self._node_head.__copy__()
+
+        # follow all nodes
+        nodes_to_expand = [_head_node_cpy]
+
+        while len(nodes_to_expand) > 0:
+            curr_node = nodes_to_expand.pop()
+
+            # is it the head node?
+            if curr_node.get_parent() is None:
+                cpy_tree._node_head = curr_node
+
+            # assign tree to copy
+            curr_node.set_tree(cpy_tree)
+
+            # get childs of the current node (if any)
+            childs_of_copy = curr_node.get_children() or []
+
+
+            # copy all children of the node + set current nodes childs to copies of childs
+            child_copies = []
+            for child_of_cpy in childs_of_copy:
+                copy = child_of_cpy.__copy__()
+                # children_cpy = [child.__copy__() for child in childs_of_copy]
+                # copy.set_children(children_cpy)
+                child_copies.append(copy)
+
+            if len(child_copies) > 0:
+                curr_node.set_children(child_copies)
+
+            # append list to iterate through children
+            nodes_to_expand += child_copies
+
+        # prepent being fit already (we are, though parent tree may be fit)
+        cpy_tree._is_fit = self.is_fit()
+
+        #cpy.fit(self.get_train_data(), self.get_train_labels())
+        return cpy_tree
 
     def map_attribute_indices_to_names(self, indices: typing.List[int]) -> typing.List[str]:
         """
@@ -271,14 +310,14 @@ class AbstractHDTree(ABC):
 
         return leafs
 
-    @abstractmethod
-    def fit(self, X: np.ndarray,
-            y: np.ndarray):
+    def prepare_fit(self, X, y):
         """
-        Will train the Tree
-        :raises Exception if preconditions are not met
+        Will prepare the tree to the data but not actually fit it.
+        May be used to check if fit would work out
+        :param X:
+        :param y:
+        :return:
         """
-
         self._labels = y
         self._train_data = X
         self._cached_predictions: typing.Dict = {}
@@ -289,11 +328,19 @@ class AbstractHDTree(ABC):
         if status is False:
             raise Exception(f"Precondition check failed due to: \n\"{msg}\"\n(Code: 347239847239)")
 
+    @abstractmethod
+    def fit(self, X: np.ndarray,
+            y: np.ndarray):
+        """
+        Will train the Tree
+        :raises Exception if preconditions are not met
+        """
+        self.prepare_fit(X, y)
+
         # create head node over all indices
         self._node_head = self._create_node_for_data_indices(data_indices=[*range(0, len(self.get_train_data()))])
 
         current_nodes_to_split = [self._node_head]
-
         level = 0
 
         while True:

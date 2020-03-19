@@ -45,8 +45,31 @@ class Node:
         self._parent = parent
         self._tree = tree
 
+    def get_params(self) -> typing.Dict[str, typing.Any]:
+        return {
+            'assigned_data_indices': self._assigned_data_indices,
+            'tree': self._tree,
+            'parent': self._parent,
+        }
+
+    def __copy__(self) -> 'Node':
+        cpy = self.__class__(**self.get_params())
+
+        if self.get_split_rule() is not None:
+            cpy.set_split_rule(self.get_split_rule().__copy__())
+            cpy.get_split_rule().set_node(cpy)
+            cpy.get_split_rule().set_child_nodes(child_nodes=self.get_children(), set_parent=True)
+
+        return cpy
+
+    def set_tree(self, tree: 'AbstractHDTree'):
+        self._tree = tree
+
     def get_parent(self) -> Optional['Node']:
         return self._parent
+
+    def set_parent(self, node: Optional['Node']):
+        self._parent = node
 
     def set_split_rule(self, rule: Optional[AbstractSplitRule]):
         """
@@ -106,6 +129,19 @@ class Node:
             return self._split_rule.get_child_nodes()
         else:
             return None
+
+    def set_children(self, childs=typing.List['Node']):
+        """
+        Sets the current children of the node.
+        Note, that can only be done if a split rule is attached to that node!
+
+        :param childs:
+        :return:
+        """
+        curr_childs = self.get_children()
+        assert curr_childs is not None, "You can only have childs if you have a split rule attached (Code: 83472389)"
+
+        self.get_split_rule().set_child_nodes(child_nodes=childs, set_parent=True)
 
     def make_leaf(self):
         """

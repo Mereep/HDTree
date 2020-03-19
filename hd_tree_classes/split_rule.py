@@ -229,6 +229,9 @@ class AbstractSplitRule(ABC):
         self._child_nodes: Optional[typing.List['Node']] = None
         self._state: Optional[typing.Dict[str, any]] = None
 
+    def set_node(self, node: 'Node'):
+        self._node = node
+
     def get_tree(self) -> 'AbstractHDTree':
         """
         Returns the tree that splitter belongs to
@@ -244,7 +247,31 @@ class AbstractSplitRule(ABC):
     def get_node(self) -> 'Node':
         return self._node
 
-    def set_child_nodes(self, child_nodes: Optional[typing.List['Node']]):
+    def set_parent(self, node: Optional['Node']):
+        """
+        Just a wrapper to parent function
+        :param node:
+        :return:
+        """
+        assert self.get_node() is not None, "This rule is not tied to any node, hence cannot set a parent (Code: 3842742893)"
+        self.get_node().set_parent(node)
+
+    def set_child_nodes(self, child_nodes: Optional[typing.List['Node']], set_parent:bool=False):
+        """
+        Will set the rules child node outcomes
+        beware that new node count has to match old node count
+        :param child_nodes:
+        :return:
+        """
+        curr_childs = self.get_child_nodes()
+        if curr_childs is not None:
+            assert len(curr_childs) == len(child_nodes), f"If the node already has childs, the amount of new childs has to match" \
+                                                         f"the amount of old childs! Old: {len(curr_childs)}, new: {len(child_nodes)} " \
+                                                         f"(Code: 982374829347)"
+        if set_parent is True:
+            for node in child_nodes:
+                node.set_parent(self.get_node())
+
         self._child_nodes = child_nodes
 
     @abstractmethod
@@ -547,7 +574,11 @@ class AbstractSplitRule(ABC):
         return None
 
     def __copy__(self):
-
+        """
+        Will copy the node.
+        Be aware that it will NOT copy the child node references!
+        :return:
+        """
         # extract all attributes
         wl = self.get_blacklist_attribute_indices()
         bl = self.get_whitelist_attribute_indices()
