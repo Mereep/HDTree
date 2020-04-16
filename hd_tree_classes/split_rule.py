@@ -30,7 +30,7 @@ from typing import Optional, Union, Tuple, List, Dict
 def hide_in_ui(cls: 'AbstractSplitRule') -> 'AbstractSplitRule':
     cls._hide_in_ui = True
     return cls
-
+    
 def check_initialized(f: typing.Callable, *args, **kwargs):
     """
     Will check if the split is initialized before calling the function
@@ -178,7 +178,7 @@ class AbstractSplitRule(ABC):
         assert attr not in cls.get_blacklist_attribute_indices(), "The attribute IS already in blacklist " \
                                                                   "(Code: 54638973458)"
 
-        cls._blacklist_attribute_indices.append(attr)   \
+        cls._blacklist_attribute_indices.append(attr)
 
     @classmethod
     def remove_blacklist_entry(cls, attr: int):
@@ -212,7 +212,11 @@ class AbstractSplitRule(ABC):
 
     @classmethod
     def get_name(self) -> str:
-        return self.__mro__[0].__name__
+        name = self.__mro__[0].__name__
+        if name == 'ABCMeta':
+            name = self.__mro__[1].__name__
+
+        return name
 
     @property
     def _is_evaluated(self) -> bool:
@@ -325,6 +329,18 @@ class AbstractSplitRule(ABC):
                                                                                        "attached (Code: 4564567)"
         return []
 
+    def get_child_node_index_for_sample(self, sample: np.ndarray) -> int:
+        """
+        Will return just the index number of the child
+        if more than one child exists an assertion will be raised
+        :param sample: 
+        :return: 
+        """
+        childs = self.get_child_node_indices_for_sample(sample=sample)
+        assert len(childs) == 1, "There is more than one child (Code: 84723402839)"
+        
+        return childs[0]
+        
     @abstractmethod
     def _get_best_split(self) -> typing.Optional[typing.Tuple[float, typing.List['Node']]]:
         """
@@ -606,7 +622,8 @@ class AbstractSplitRule(ABC):
         :return:
         """
         return 1
-
+    
+    
 class AbstractNumericalSplit(AbstractSplitRule):
     """
     Represents a split over categorical attributes
@@ -1116,7 +1133,7 @@ class FixedValueSplit(OneAttributeSplitMixin):
                 return f"{attr_name} doesn't match value {value}"
         else:
             raise Exception("Fixed Value split is not initialized, hence cannot explain decision (Code: 2983742893")
-
+    
     @check_initialized
     def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List[int]:
         state = self.get_state()
@@ -1355,7 +1372,7 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                     return [0]
                 else:
                     return [1]
-
+                
     def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs):
 
         # get median val and standard deviation
@@ -1509,20 +1526,29 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
         :return:
         """
         pass
+    
+    @check_initialized
+    def is_val_inside(self, val: float) -> bool:
+        """
+        Checks if the given value is inside interval
+        :param val: 
+        :return: 
+        """
+        lower = self.get_lower_bound()
+        upper = self.get_upper_bound()
+                
+        return lower <= val < upper
 
     @check_initialized
-    def is_inside(self, sample: np.ndarray) -> bool:
+    def is_sample_inside(self, sample: np.ndarray) -> bool:
         """
         Checks if the given sample falls inside the interval
         :param sample:
         :return:
         """
-        lower = self.get_lower_bound()
-        upper = self.get_upper_bound()
         val = sample[self.get_split_attribute_index()]
 
-
-        return lower <= val < upper
+        return self.is_val_inside(val=val)
 
     def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs):
 
@@ -1590,8 +1616,8 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                 lower_ending_val = lower_ending_rule.get_upper_bound()
                 higher_ending_val = higher_ending_rule.get_upper_bound()
 
-                in_lower = lower_starting_rule.is_inside(sample=sample)
-                in_upper = higher_starting_rule.is_inside(sample=sample)
+                in_lower = lower_starting_rule.is_val_inside(val=sample_val)
+                in_upper = higher_starting_rule.is_val_inside(val=sample_val)
 
                 if sample_val < lower_starting_val:  # case IV: Below both
                     q_split = MergedQuantileSplit.new_from_other(other=self, state={'quantile': 0,
@@ -1677,7 +1703,7 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                         return qr_split
 
                     # II.III is in range
-                    if self.is_inside(sample):
+                    if self.is_sample_inside(sample):
                         return self.__copy__()
                     
                     # II.IV above all
@@ -1696,7 +1722,7 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                         return q_split
                     
                     # III.II sample inside range
-                    if self.is_inside(sample):
+                    if self.is_sample_inside(sample):
                         return self.__copy__()
 
                     # III.III sample is above range but below quantile
@@ -1801,7 +1827,7 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
                 return [0]
             else:
                 return [1]
-
+    
     def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args, **kwargs):
         left_vals = data_values_left < data_values_right
         state = {}
@@ -1872,7 +1898,7 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
                 return [0]
             else:
                 return [1]
-
+    
     def _get_children_indexer_and_state(self,
                                         data_values_left: np.ndarray,
                                         data_values_right: np.ndarray, *args, **kwargs):
@@ -2101,15 +2127,15 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                 state_own = self.get_state()
                 state_other = other.get_state()
 
-                if sample is None:  # case: no sample mode
-                    cpy = self.__copy__()
-                    state_new = state_own.copy()
-                    state_new['split_value'] = min(state_own['split_value'], state_other['split_value'])
-                    state_new['quantile'] = min(state_own['quantile'], state_other['quantile'])
-                    cpy.set_state(state_new)
+                #if sample is None:  # case: no sample mode
+                cpy = self.__copy__()
+                state_new = state_own.copy()
+                state_new['split_value'] = min(state_own['split_value'], state_other['split_value'])
+                state_new['quantile'] = min(state_own['quantile'], state_other['quantile'])
+                cpy.set_state(state_new)
 
-                    return cpy
-                else:
+                return cpy
+                """else:
                     attr_idx = self.get_split_attribute_index()
                     sample_val = sample[attr_idx]
 
@@ -2130,7 +2156,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
                         return range
                     else:  #case: above the highest
-                        return upper_rule.__copy__()
+                        return upper_rule.__copy__()"""
         else:
             if isinstance(other, AbstractQuantileSplit):
                 sample_val = sample[self.get_split_attribute_index()]
@@ -2832,6 +2858,7 @@ def simplify_rules(rules: List[AbstractSplitRule],
             sample_for_i = model_to_sample[tree_i]
         else:
             sample_for_i = sample
+            
         for j in range(i+1, len(curr_rules)):
             if model_to_sample is not None:
                 tree_j = rules[j].get_tree()

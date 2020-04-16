@@ -115,6 +115,32 @@ class AbstractHDTree(ABC):
                                                                                      "(Code: 3824728934)"
         return [*map(lambda idx: self.get_attribute_names()[idx], indices)]
 
+    def set_max_level(self, max_levels: int):
+        """
+        Will set the maximum allowed levels of the tree,
+        but will not change the current structure
+        :param max_levels:
+        :return:
+        """
+        assert 0 <= max_levels, "Maximum level cannot be negative (Code: 4583548934)"
+        self._max_levels = max_levels
+
+    def get_max_level(self) -> int:
+        return self._max_levels
+
+    def set_min_leaf_samples(self, min_samples: int):
+        """
+        Will set the minimum accepted  sample size at leafs but will
+        not change the structure of the current tree
+        :param min_samples:
+        :return:
+        """
+        assert 1 <= min_samples, "Trees have to be able to at least grow to level 2 (Code: 984w7598354)"
+        self._min_samples_at_leaf = min_samples
+
+    def get_min_leaf_samples(self) -> int:
+        return self._min_samples_at_leaf
+
     def get_params(self, deep=True):
         return {
             'allowed_splits': self._allowed_splits,
@@ -350,6 +376,8 @@ class AbstractHDTree(ABC):
             collected_children = []
 
             for node_to_split in current_nodes_to_split:
+                if self._max_levels is not None and self._max_levels == level:
+                    break
                 # n_node_samples = len(node_to_split.get_data_indices())
 
                 # check if we want to split that node
@@ -375,9 +403,6 @@ class AbstractHDTree(ABC):
 
             current_nodes_to_split = collected_children
             level += 1
-
-            if self._max_levels is not None and self._max_levels == level:
-                break
 
             # nothing left to split we are done
             if len(current_nodes_to_split) == 0:
@@ -738,10 +763,11 @@ class HDTreeClassifier(AbstractHDTree):
         is_str = [isinstance(l, str) or l is None for l in labels]
         if not np.all(is_str):
             # status = False
-            self._output_message("Warning: Labels for classification "
-                                 "should to be of type String. Please explicitly cast if needed "
-                                 "(e.g.: labels.astype(np.str)) "
-                                 "I will go on, but random errors may occur (Code: 8342792)", only_if_verbose=False)
+            #self._output_message("Warning: Labels for classification "
+            #                     "should to be of type String. Please explicitly cast if needed "
+            #                     "(e.g.: labels.astype(np.str)) "
+            #                     "I will go on, but random errors may occur (Code: 8342792)", only_if_verbose=False)
+            pass
 
         # labels should not be too much. Basically checking if we are
         # really talking about a classification problem
