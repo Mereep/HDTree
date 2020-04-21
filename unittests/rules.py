@@ -690,4 +690,31 @@ class RulesTester(unittest.TestCase):
         self.assertEqual(res[0].get_state()['lower_bound'], 68)
         self.assertEqual(res[0].get_state()['upper_bound'], 75)
 
+        # merge fixed value split with quantile split
+        split_2 = TenQuantileSplit(node=None)
+        split_2._state = {
+            'split_value': 67,
+            'quantile': 1,
+            'split_attribute_indices': [1]
+        }
+
+        split_1 = TenQuantileSplit(node=None)
+        split_1._state = {
+            'split_value': 69,
+            'quantile': 1,
+            'split_attribute_indices': [0]
+        }
+
+        split_2 = FixedValueSplit(node=None)
+        split_2._state = {
+            'value': 68,
+            'split_attribute_indices': [0]
+        }
+
+        res = simplify_rules([split_1, split_2], sample=np.array([67]))
+        self.assertEqual(len(res), 2)
+
+        res = simplify_rules([split_1, split_2], sample=np.array([68]))
+        self.assertEqual(len(res), 1)
+
 

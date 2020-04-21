@@ -457,6 +457,14 @@ class AbstractSplitRule(ABC):
         return cls._blacklist_attribute_indices
 
     @classmethod
+    def build(cls):
+        """
+        Will get the rule without any restrictions
+        :return:
+        """
+        return cls.build_with_restrictions()
+
+    @classmethod
     def build_with_restrictions(cls,
                                 whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]]=None,
                                 blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]]=None,
@@ -1253,12 +1261,19 @@ class FixedValueSplit(OneAttributeSplitMixin):
                                                 "I will ignore that. (Code: 348230948)")
 
         else: # we have a sample
-            # We always are more specific on intervals etc. so we always return oneself
-            if isinstance(other, AbstractQuantileSplit) or isinstance(other, CloseToMedianSplit) or isinstance(other, AbstractQuantileRangeSplit):
-                return self.__copy__()
+            own_val = fixed_val
+            sample_val = sample[self.get_split_attribute_index()]
+
+            # We always are more specific on intervals IF sample value == own value. so we always return oneself
+            if isinstance(other, AbstractQuantileSplit) or \
+                    isinstance(other, AbstractQuantileRangeSplit) or \
+                    isinstance(other, CloseToMedianSplit):
+
+                if fixed_val == sample_val:
+                    return self.__copy__()
+
+
             elif isinstance(other, FixedValueSplit):
-                sample_val = sample[self.get_split_attribute_index()]
-                own_val = fixed_val
                 other_val = other.get_fixed_val()
 
                 # case I both are identical -> just eat one rule
