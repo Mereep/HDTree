@@ -530,10 +530,10 @@ class AbstractHDTree(ABC):
         for i in range(data.shape[1]):
             vals = data[:, i]
             none_type = type(None)
-            # categorical?
+            # numerical?
             if vals.dtype.kind in numeric_kinds:
                 attribute = 'numerical'
-            # numeric?
+            # categorical?
             elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
                 attribute = 'categorical'
 
