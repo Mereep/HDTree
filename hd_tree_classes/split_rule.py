@@ -26,11 +26,13 @@ from functools import wraps
 import typing
 from typing import Optional, Union, Tuple, List, Dict
 
+
 # ANNOTATIONS
 def hide_in_ui(cls: 'AbstractSplitRule') -> 'AbstractSplitRule':
     cls._hide_in_ui = True
     return cls
-    
+
+
 def check_initialized(f: typing.Callable, *args, **kwargs):
     """
     Will check if the split is initialized before calling the function
@@ -40,11 +42,12 @@ def check_initialized(f: typing.Callable, *args, **kwargs):
     :param kwargs:
     :return:
     """
+
     @wraps(f)
     def check(self: 'AbstractSplitRule', *args, **kwargs):
         if not self.is_initialized():
             raise Exception(f"Could not perform {f.__name__}. The split {self.get_name()} "
-                            f"needs to be initialized (Code: 38472384723" )
+                            f"needs to be initialized (Code: 38472384723")
         return f(self, *args, **kwargs)
 
     return check
@@ -56,8 +59,8 @@ class AbstractSplitRule(ABC):
     a node may be split into child nodes
     """
 
-    _min_level: int = 0               # minimum level this rule may be applied from
-    _max_level:int = sys.maxsize      # maximum level that rule may be applied to
+    _min_level: int = 0  # minimum level this rule may be applied from
+    _max_level: int = sys.maxsize  # maximum level that rule may be applied to
 
     # restrict to the given attributes
     _whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None
@@ -86,10 +89,9 @@ class AbstractSplitRule(ABC):
 
         return new
 
-    @classmethod
+    @classmethod  # tbh that doesnt belong here, or may be renamed to something more generic
     def show_in_ui(cls) -> bool:
         return not cls._hide_in_ui
-
 
     def __str__(self):
         return self.user_readable_description()
@@ -123,7 +125,7 @@ class AbstractSplitRule(ABC):
         Creates a new type from the current rule (class-type)
         :return:
         """
-        cls_me = type(cls.get_name(), (cls, ), {})
+        cls_me = type(cls.get_name(), (cls,), {})
         return cls_me
 
     @classmethod
@@ -150,7 +152,7 @@ class AbstractSplitRule(ABC):
         :param attr:
         :return:
         """
-        assert not cls.has_blacklist_attributes(), "This rule has alread blacklist attributes, hence cannot add " \
+        assert not cls.has_blacklist_attributes(), "This rule has already blacklist attributes, hence cannot add " \
                                                    "whitelist attributes (Code: 832472389)"
 
         if not cls.has_whitelist_attributes():
@@ -211,10 +213,10 @@ class AbstractSplitRule(ABC):
         del cls._whitelist_attribute_indices[cls._whitelist_attribute_indices.index(attr)]
 
     @classmethod
-    def get_name(self) -> str:
-        name = self.__mro__[0].__name__
+    def get_name(cls) -> str:
+        name = cls.__mro__[0].__name__
         if name == 'ABCMeta':
-            name = self.__mro__[1].__name__
+            name = cls.__mro__[1].__name__
 
         return name
 
@@ -224,7 +226,7 @@ class AbstractSplitRule(ABC):
 
     @_is_evaluated.setter
     def _is_evaluated(self, value=None):
-        pass #  This is a noop just to make it backwards compatible
+        pass  # This is a noop just to make it backwards compatible
 
     def __init__(self, node: 'Node'):
         self._node = node
@@ -260,18 +262,24 @@ class AbstractSplitRule(ABC):
         assert self.get_node() is not None, "This rule is not tied to any node, hence cannot set a parent (Code: 3842742893)"
         self.get_node().set_parent(node)
 
-    def set_child_nodes(self, child_nodes: Optional[typing.List['Node']], set_parent:bool=False):
+    def set_child_nodes(self, child_nodes: Optional[typing.List['Node']],
+                        set_parent: bool = False,
+                        force: bool = False):
         """
         Will set the rules child node outcomes
         beware that new node count has to match old node count
         :param child_nodes:
+        :param force: do not check for same amount of childs
+        :param set_parent: wheter to update the parent information of the child nodes to point current node
         :return:
         """
         curr_childs = self.get_child_nodes()
         if curr_childs is not None:
-            assert len(curr_childs) == len(child_nodes), f"If the node already has childs, the amount of new childs has to match" \
-                                                         f"the amount of old childs! Old: {len(curr_childs)}, new: {len(child_nodes)} " \
-                                                         f"(Code: 982374829347)"
+            if not force:
+                assert len(curr_childs) == len(child_nodes), \
+                    f"If the node already has childs, the amount of new childs has to match " \
+                    f"the amount of old childs! Old: {len(curr_childs)}, new: {len(child_nodes)} " \
+                    f"(Code: 982374829347)"
         if set_parent is True:
             for node in child_nodes:
                 node.set_parent(self.get_node())
@@ -338,9 +346,9 @@ class AbstractSplitRule(ABC):
         """
         childs = self.get_child_node_indices_for_sample(sample=sample)
         assert len(childs) == 1, "There is more than one child (Code: 84723402839)"
-        
+
         return childs[0]
-        
+
     @abstractmethod
     def _get_best_split(self) -> typing.Optional[typing.Tuple[float, typing.List['Node']]]:
         """
@@ -379,7 +387,7 @@ class AbstractSplitRule(ABC):
                 raise Exception("A Node has to split into at least two children (Code: 32487239874)")
 
             self._score = score
-            self.set_child_nodes(child_nodes=nodes)
+            self.set_child_nodes(child_nodes=nodes, force=True)
 
         self._is_evaluated = True
 
@@ -437,7 +445,6 @@ class AbstractSplitRule(ABC):
         """
         return cls._max_level
 
-
     @classmethod
     def get_whitelist_attribute_indices(cls) -> Optional[typing.List[int]]:
         """
@@ -466,8 +473,8 @@ class AbstractSplitRule(ABC):
 
     @classmethod
     def build_with_restrictions(cls,
-                                whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]]=None,
-                                blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]]=None,
+                                whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None,
+                                blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None,
                                 min_level: int = 0,
                                 max_level: int = sys.maxsize):
         """
@@ -492,7 +499,7 @@ class AbstractSplitRule(ABC):
 
         return t
 
-    def _check_rule_applicable_to_attribute_index(self, index: int):
+    def _check_rule_applicable_to_attribute_index(self, index: int) -> bool:
         """
         Check if whitelist or blacklist restrict access to that attribute
         :param index:
@@ -506,7 +513,6 @@ class AbstractSplitRule(ABC):
         if self.get_tree() is not None:
             if (has_whitelist and isinstance(whitelist[0], str)) or \
                     (has_blacklist and isinstance(blacklist[0], str)):
-
                 index = self.get_tree().get_attribute_names()[index]
 
         if has_whitelist:
@@ -543,10 +549,11 @@ class AbstractSplitRule(ABC):
         """
         pass
 
-    def __add__(self, other: 'AbstractSplitRule', use_attribute_names: bool=True,
-                sample: Optional[np.ndarray] = None, try_reverse: bool=True) -> Optional[Union['AbstractSplitRule',
-                                                                    Tuple['AbstractSplitRule',
-                                                                          'AbstractSplitRule']]]:
+    def __add__(self, other: 'AbstractSplitRule', use_attribute_names: bool = True,
+                sample: Optional[np.ndarray] = None, try_reverse: bool = True) -> Optional[Union['AbstractSplitRule',
+                                                                                                 Tuple[
+                                                                                                     'AbstractSplitRule',
+                                                                                                     'AbstractSplitRule']]]:
         """
         Will try to Merge to split rules.
         If success it will return ONE split rule that is combining the both rules, otherwise will return
@@ -565,9 +572,11 @@ class AbstractSplitRule(ABC):
                 # merge if indices are the same, note if there is
                 # no tree option attribute names is silently over-writen
                 can_merge = self.get_split_attribute_indices() == other.get_split_attribute_indices()
-            else: # merge if names are the same
-                split_names_left = [self.get_tree().get_attribute_names()[idx] for idx in self.get_split_attribute_indices()]
-                split_names_right = [other.get_tree().get_attribute_names()[idx] for idx in other.get_split_attribute_indices()]
+            else:  # merge if names are the same
+                split_names_left = [self.get_tree().get_attribute_names()[idx] for idx in
+                                    self.get_split_attribute_indices()]
+                split_names_right = [other.get_tree().get_attribute_names()[idx] for idx in
+                                     other.get_split_attribute_indices()]
                 can_merge = split_names_left == split_names_right
 
             if can_merge:
@@ -611,10 +620,10 @@ class AbstractSplitRule(ABC):
         node = self.get_node()
 
         clone_cls = type(self.__class__.__mro__[0].__class__.__name__,
-                         (self.__class__.__mro__[0], ), {'_whitelist_attribute_indices': wl,
-                                                         '_blacklist_attribute_indices': bl,
-                                                         '_min_level': min_level,
-                                                         '_max_level': max_level})
+                         (self.__class__.__mro__[0],), {'_whitelist_attribute_indices': wl,
+                                                        '_blacklist_attribute_indices': bl,
+                                                        '_min_level': min_level,
+                                                        '_max_level': max_level})
 
         clone_instance: AbstractSplitRule = clone_cls(node=node)
         clone_instance.set_state(state=self.get_state().copy())
@@ -630,12 +639,13 @@ class AbstractSplitRule(ABC):
         :return:
         """
         return 1
-    
-    
+
+
 class AbstractNumericalSplit(AbstractSplitRule):
     """
     Represents a split over categorical attributes
     """
+
     def _get_attribute_candidates(self) -> typing.List[int]:
         """
         Returns a list of attribute / feature indices that Split Rule is applicable to
@@ -755,7 +765,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
                                                for indices in curr_child_indices]
 
                                 state['split_attribute_indices'] = (attr_idx1, attr_idx2)
-                                self.set_child_nodes(child_nodes=child_nodes)
+                                self.set_child_nodes(child_nodes=child_nodes, force=True)
                                 self.set_state(state)
                                 score = self.get_information_measure()(parent_node=self.get_node())
 
@@ -773,7 +783,8 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
         return None
 
     @abstractmethod
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args, **kwargs) -> Optional[
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args,
+                                        **kwargs) -> Optional[
         typing.Tuple[typing.Dict,
                      typing.Tuple[np.ndarray, ...]]]:
         """
@@ -851,7 +862,7 @@ class ThreeAttributeSplitMixin(AbstractSplitRule):
                         # get indexer for child node data assignments
                         rets = self._get_children_indexer_and_state(col_data_1[non_null_indexer_1_2_3],
                                                                     col_data_2[non_null_indexer_1_2_3],
-                                                                    col_data_3[non_null_indexer_1_2_3], i,j, z
+                                                                    col_data_3[non_null_indexer_1_2_3], i, j, z
                                                                     )
 
                         if not isinstance(rets, typing.List):
@@ -883,7 +894,8 @@ class ThreeAttributeSplitMixin(AbstractSplitRule):
                                 # collect data indices for each node
                                 has_empty_child = False
                                 for child_assignment in assignments:
-                                    assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(
+                                    assert isinstance(child_assignment,
+                                                      np.ndarray) and child_assignment.dtype is np.dtype(
                                         np.bool), \
                                         "Assignments have to be a numpy array of type bool (Code: 234234056)"
 
@@ -926,8 +938,8 @@ class ThreeAttributeSplitMixin(AbstractSplitRule):
                                         data_values_left: np.ndarray,
                                         data_values_middle: np.ndarray,
                                         data_values_right: np.ndarray) -> Optional[
-                                            typing.List[typing.Tuple[typing.Dict,
-                                                         typing.Tuple[np.ndarray]]]]:
+        typing.List[typing.Tuple[typing.Dict,
+                                 typing.Tuple[np.ndarray]]]]:
         """
 
         :param data_values_left:
@@ -1044,7 +1056,7 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                                            for indices in curr_child_indices]
 
                             state['split_attribute_indices'] = [attr_idx]
-                            self.set_child_nodes(child_nodes=child_nodes)
+                            self.set_child_nodes(child_nodes=child_nodes, force=True)
                             self.set_state(state)
                             score = self.get_information_measure()(parent_node=self.get_node())
 
@@ -1062,11 +1074,12 @@ class OneAttributeSplitMixin(AbstractSplitRule):
         return None
 
     @abstractmethod
-    def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs) -> Optional[typing.List[typing.Tuple[typing.Dict,
-                                                                                                            typing.Tuple[
-                                                                                                                np.ndarray]]]]:
+    def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs) -> Optional[
+        typing.List[typing.Tuple[typing.Dict,
+                                 typing.Tuple[
+                                     np.ndarray]]]]:
         """
-        Returns for each child no
+        Returns for each child the state and indices for each possible realization over the data
         :param data_values:
         :return: state, tuple of child indices
         """
@@ -1141,7 +1154,7 @@ class FixedValueSplit(OneAttributeSplitMixin):
                 return f"{attr_name} doesn't match value {value}"
         else:
             raise Exception("Fixed Value split is not initialized, hence cannot explain decision (Code: 2983742893")
-    
+
     @check_initialized
     def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List[int]:
         state = self.get_state()
@@ -1158,10 +1171,6 @@ class FixedValueSplit(OneAttributeSplitMixin):
 
     def _get_attribute_candidates(self) -> typing.List[int]:
         candidates = []
-        categorical_numerics = {'b',  # boolean
-                                'u',  # unsigned integer
-                                'i',  # signed integer
-                                }
         for i, t in enumerate(self.get_tree().get_attribute_types()):
             if self._check_rule_applicable_to_attribute_index(index=i):
                 if t == 'categorical':
@@ -1175,16 +1184,21 @@ class FixedValueSplit(OneAttributeSplitMixin):
 
     def _get_children_indexer_and_state(self, data_values: np.ndarray, index: int, *args, **kwargs):
         unique_vals = self.get_tree().get_unique_values_for_attribute(index)
-        
+
         if unique_vals is not None:
             splits = []
-    
+
+            # if we just have a binary problem we will safe time by only taking one of the options into account
+            # since results will be the same for both possible values
+            if len(unique_vals) == 2:
+                unique_vals.pop()  # will inplace remove the last element
+
             # check each unique val (except None)
             for val in unique_vals:
-                if val is not None: # except None
+                if val is not None:  # except None
                     left_childs = data_values == val
                     splits.append(({'value': val}, (left_childs, ~left_childs)))
-    
+
             return splits
 
     def set_value(self, value: Union[int, str]):
@@ -1199,7 +1213,7 @@ class FixedValueSplit(OneAttributeSplitMixin):
     def get_fixed_val(self) -> Union[str, float, int, typing.Any]:
         return self.get_state()['value']
 
-    def _merge(self, other, sample: Optional[np.ndarray]=None) -> Optional['AbstractSplitRule']:
+    def _merge(self, other, sample: Optional[np.ndarray] = None) -> Optional['AbstractSplitRule']:
         """
         :param other:
         :return:
@@ -1260,7 +1274,7 @@ class FixedValueSplit(OneAttributeSplitMixin):
                                                 "This can never work. Do not call this function directly! "
                                                 "I will ignore that. (Code: 348230948)")
 
-        else: # we have a sample
+        else:  # we have a sample
             own_val = fixed_val
             sample_val = sample[self.get_split_attribute_index()]
 
@@ -1307,6 +1321,8 @@ class FixedValueSplit(OneAttributeSplitMixin):
 class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
     """
     Will split on a numerical attributes median +- 1/2 * stdev
+
+    @TODO make this a RangeSplit and let it handle merging etc
     """
 
     def __init__(self, *args, **kwargs):
@@ -1387,7 +1403,7 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                     return [0]
                 else:
                     return [1]
-                
+
     def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs):
 
         # get median val and standard deviation
@@ -1401,58 +1417,53 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
         return [(state, (inside_median, ~inside_median))]
 
-    def _merge(self, other, sample: Optional[np.ndarray]=None) -> Optional['AbstractSplitRule']:
+    def _merge(self, other, sample: Optional[np.ndarray] = None) -> Optional['AbstractSplitRule']:
         self_state = self.get_state()
         other_state = other.get_state()
         self_left = self_state['median'] - 0.5 * self_state['stdev']
         self_right = self_state['median'] + 0.5 * self_state['stdev']
 
-        if isinstance(other, CloseToMedianSplit):
-            other_left = other_state['median'] - 0.5 * other_state['stdev']
-            other_right = other_state['median'] + 0.5 * other_state['stdev']
+        if sample is None:
+            if isinstance(other, CloseToMedianSplit):
+                other_left = other_state['median'] - 0.5 * other_state['stdev']
+                other_right = other_state['median'] + 0.5 * other_state['stdev']
 
-            # we can eat a median split if it completely covers us
-            if other_left <= self_left and other_right >= self_right:
-                return self.__copy__()
+                # we can eat a median split if it completely covers us
+                if other_left <= self_left and other_right >= self_right:
+                    return self.__copy__()
 
-            # I overlap right (left version is equivalent and will be checked by switched operators)
-            if other_left < self_left < other_right < self_right:
-                new_left = self_left
-                new_right = other_right
-                cpy = self.__copy__()
-                cpy._state['median'] = (new_left + new_right) / 2
-                cpy._state['stdev'] = (new_right - new_left)
+                # I overlap right (left version is equivalent and will be checked by switched operators)
+                if other_left < self_left < other_right < self_right:
+                    new_left = self_left
+                    new_right = other_right
+                    cpy = self.__copy__()
+                    cpy._state['median'] = (new_left + new_right) / 2
+                    cpy._state['stdev'] = (new_right - new_left)
 
-                return cpy
+                    return cpy
 
-        if isinstance(other, AbstractQuantileSplit):
-            # if we are below other threshold, the var must lay inside us
-            # so we consume the QuantileSplit completely
-            other_right = other.get_state()['split_value']
-            if self_right <= other_right:
-                return self.__copy__()
+            if isinstance(other, AbstractQuantileSplit):
+                # if we are below other threshold, the var must lay inside us
+                # so we consume the QuantileSplit completely
+                other_right = other.get_state()['split_value']
+                if self_right <= other_right:
+                    return self.__copy__()
 
-            # check if we hang out right
-            if self_left < other_right < self_right:
-                new_median = (self_left + other_right) / 2
-                new_stdev = (other_right - self_left) / 2
-                cpy = self.__copy__()
-                cpy._state['stdev'] = new_stdev
-                cpy._state['median'] = new_median
+                # check if we hang out right
+                if self_left < other_right < self_right:
+                    new_median = (self_left + other_right) / 2
+                    new_stdev = (other_right - self_left) / 2
+                    cpy = self.__copy__()
+                    cpy._state['stdev'] = new_stdev
+                    cpy._state['median'] = new_median
 
-                return cpy
-
+                    return cpy
 
         return None
 
 
-class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
-    """
-    Will divide the data into Quantiles and splits data laying inside a span of these or outside
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+@hide_in_ui
+class AbstractRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
     @check_initialized
     def get_lower_bound(self) -> float:
@@ -1462,60 +1473,28 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
     def get_upper_bound(self) -> float:
         return self.get_state()['upper_bound']
 
-    @classmethod
-    def get_help_text(cls):
-        return "Will divide the data into given amount of uniorm quantiles like:\n" \
-               "[Q1|Q2|Q3|Q4|Q5|....]. all pairs of interval boundaries are than evaluated to split the data" \
-               "being inside the interval or outside,\n e.g. Age is between 20 and 40"
-
-    def explain_split(self, sample: np.ndarray, *args, **kwargs):
-        hide_sample_specifics = False
-        if 'hide_sample_specifics' in kwargs:
-            hide_sample_specifics = kwargs['hide_sample_specifics']
-
-        if self.is_initialized():
-            attr_index = self.get_split_attribute_index()
-            attr_name = self.get_split_attribute_name()
-            val = sample[attr_index]
-            lower = self.get_lower_bound()
-            upper = self.get_upper_bound()
-
-            if val is None:
-                return f"alue for {attr_name} is not available, hence assigned to all children"
-            else:
-                if lower <= val < upper:
-                    return f"{attr_name} is INSIDE range [{lower:.2f}, ... {upper:.2f}["
-                else:
-                    if val < lower:
-                        way = 'below'
-                    else:
-                        way = 'above'
-                    if not hide_sample_specifics:
-                        add_sample_specific_text =  f'({val:.2f} is {way} range)'
-                    else:
-                        add_sample_specific_text = ''
-
-                    return f"{attr_name} is OUTSIDE range [{lower:.2f}, ..., {upper:.2f}[{add_sample_specific_text}"
-        else:
-            raise Exception("Close To Median Split not initialized, hence, "
-                            "cannot explain a decision (Code: 234723948723498237)")
-
-    def get_edge_labels(self):
-        return ["inside interval", "outside Intervall"]
-
-    def user_readable_description(self):
+    @check_initialized
+    def is_val_inside(self, val: float) -> bool:
         """
-        Will return what the split was about
+        Checks if the given value is inside interval
+        :param val:
         :return:
         """
-        if self.is_initialized():
-            attr_name = self.get_split_attribute_name()
-            lower = self.get_lower_bound()
-            upper = self.get_upper_bound()
+        lower = self.get_lower_bound()
+        upper = self.get_upper_bound()
 
-            return f"{attr_name} is within range [{lower:.2f}, ..., {upper:.2f}["
-        else:
-            return "Quantile range split not initialized"
+        return lower <= val < upper
+
+    @check_initialized
+    def is_sample_inside(self, sample: np.ndarray) -> bool:
+        """
+        Checks if the given sample falls inside the interval
+        :param sample:
+        :return:
+        """
+        val = sample[self.get_split_attribute_index()]
+
+        return self.is_val_inside(val=val)
 
     @check_initialized
     def get_child_node_indices_for_sample(self, sample: np.ndarray) -> typing.List['Node']:
@@ -1533,61 +1512,59 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
             else:
                 return [1]
 
-    @property
-    @abstractmethod
-    def quantile_count(self) -> int:
+    def get_edge_labels(self):
+        return ["inside interval", "outside Interval"]
+
+    def user_readable_description(self):
         """
-        Gets the amount of bins that should be created
+        Will return what the split was about
         :return:
         """
-        pass
-    
-    @check_initialized
-    def is_val_inside(self, val: float) -> bool:
-        """
-        Checks if the given value is inside interval
-        :param val: 
-        :return: 
-        """
-        lower = self.get_lower_bound()
-        upper = self.get_upper_bound()
-                
-        return lower <= val < upper
+        if self.is_initialized():
+            attr_name = self.get_split_attribute_name()
+            lower = self.get_lower_bound()
+            upper = self.get_upper_bound()
 
-    @check_initialized
-    def is_sample_inside(self, sample: np.ndarray) -> bool:
-        """
-        Checks if the given sample falls inside the interval
-        :param sample:
-        :return:
-        """
-        val = sample[self.get_split_attribute_index()]
+            return f"{attr_name} is within range [{lower:.2f}, ..., {upper:.2f}["
+        else:
+            return "Quantile range split not initialized"
 
-        return self.is_val_inside(val=val)
+    def explain_split(self, sample: np.ndarray, *args, **kwargs):
+        hide_sample_specifics = False
+        if 'hide_sample_specifics' in kwargs:
+            hide_sample_specifics = kwargs['hide_sample_specifics']
 
-    def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs):
+        if self.is_initialized():
+            attr_index = self.get_split_attribute_index()
+            attr_name = self.get_split_attribute_name()
+            val = sample[attr_index]
+            lower = self.get_lower_bound()
+            upper = self.get_upper_bound()
 
-        quantiles = self.quantile_count
-        assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 2342323)"
+            if val is None:
+                return f"value for {attr_name} is not available, hence assigned to all children"
+            else:
+                if lower <= val < upper:
+                    return f"{attr_name} is INSIDE range [{lower:.2f}, ... {upper:.2f}["
+                else:
+                    if val < lower:
+                        way = 'below'
+                    else:
+                        way = 'above'
+                    if not hide_sample_specifics:
+                        add_sample_specific_text = f'({val:.2f} is {way} range)'
+                    else:
+                        add_sample_specific_text = ''
 
-        quantile_parts = [(q + 1) / (quantiles + 1) for q in range(quantiles + 1)]
-        quantile_vals = np.quantile(data_values, quantile_parts)
-        quantile_vals = list(set(list(quantile_vals))) # this will remove doubled entries
-        results = []
+                    return f"{attr_name} is OUTSIDE range [{lower:.2f}, ..., {upper:.2f}[{add_sample_specific_text}"
+        else:
+            raise Exception("Range Split is not initialized, hence, "
+                            "cannot explain a decision (Code: 234723948723498237)")
 
-        for left_q in range(len(quantile_parts) - 1):
-            for right_q in range(left_q + 1, len(quantile_vals)):
-                left = (data_values >= quantile_vals[left_q]) &  (data_values < quantile_vals[right_q])
-                results.append(({'lower_bound': quantile_vals[left_q],
-                                 'upper_bound': quantile_vals[right_q]},
-                                 (left, ~left)))
-
-        return results
-
-    def _merge(self, other, sample: Optional[np.ndarray]=None) -> Optional['AbstractSplitRule']:
+    def _merge(self, other, sample: Optional[np.ndarray] = None) -> Optional['AbstractSplitRule']:
         # consume other range split if it is embedding us completely
 
-        if sample is None: # case: No sample given
+        if sample is None:  # case: No sample given
             if isinstance(other, AbstractQuantileRangeSplit):
                 if self.get_lower_bound() >= other.get_lower_bound() and \
                         self.get_upper_bound() <= other.get_upper_bound():
@@ -1604,10 +1581,10 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                 if self.get_upper_bound() <= other.get_upper_bound():
                     return self.__copy__()
 
-        else: # case: Merge according to sample
+        else:  # case: Merge according to sample
             sample_val = sample[self.get_split_attribute_index()]
 
-            if sample_val is None: # no value so any rule is fine
+            if sample_val is None:  # no value so any rule is fine
                 return self.__copy__()
 
             if isinstance(other, AbstractQuantileRangeSplit):
@@ -1627,7 +1604,6 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                 lower_starting_val = lower_starting_rule.get_lower_bound()
                 higher_starting_val = higher_starting_rule.get_lower_bound()
 
-
                 lower_ending_val = lower_ending_rule.get_upper_bound()
                 higher_ending_val = higher_ending_rule.get_upper_bound()
 
@@ -1640,33 +1616,33 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                     return q_split
 
                 elif sample_val >= higher_ending_val:  # case III: above both
-                    q_split = MergedQuantileSplit.new_from_other(other=self, state={'quantile': 0, 
+                    q_split = MergedQuantileSplit.new_from_other(other=self, state={'quantile': 0,
                                                                                     'split_value': higher_ending_val})
                     return q_split
 
-                elif in_lower and in_upper: # case I: inside both
-                    qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                          'upper_bound': lower_ending_val,
-                                                                                          'lower_bound': higher_starting_val})
+                elif in_lower and in_upper:  # case I: inside both
+                    qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                        'upper_bound': lower_ending_val,
+                        'lower_bound': higher_starting_val})
                     return qr_split
 
                 elif in_lower and not in_upper:  # case II: within lower but not upper
-                    qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                          'upper_bound': higher_starting_rule.get_lower_bound(),
-                                                                                          'lower_bound': lower_starting_rule.get_lower_bound()})
+                    qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                        'upper_bound': higher_starting_rule.get_lower_bound(),
+                        'lower_bound': lower_starting_rule.get_lower_bound()})
                     return qr_split
 
                 elif in_upper and not in_lower:  # case V: within upper but on in lower
-                    qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                          'upper_bound': higher_starting_rule.get_upper_bound(),
-                                                                                          'lower_bound': lower_starting_rule.get_upper_bound()})
+                    qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                        'upper_bound': higher_starting_rule.get_upper_bound(),
+                        'lower_bound': lower_starting_rule.get_upper_bound()})
                     return qr_split
 
                 elif not in_upper and not in_lower and lower_ending_val <= sample_val < higher_starting_val:
                     # case VI rules do not overlap and sample is between both
-                    qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                          'upper_bound': higher_starting_rule.get_lower_bound(),
-                                                                                          'lower_bound': lower_starting_rule.get_upper_bound()})
+                    qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                        'upper_bound': higher_starting_rule.get_lower_bound(),
+                        'lower_bound': lower_starting_rule.get_upper_bound()})
                     return qr_split
 
             elif isinstance(other, AbstractQuantileSplit):
@@ -1685,16 +1661,16 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
 
                     # case I.II sample inside
                     if lower_val <= sample_val < split_val:
-                        qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                              'upper_bound': split_val,
-                                                                                              'lower_bound': lower_val})
+                        qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                            'upper_bound': split_val,
+                            'lower_bound': lower_val})
                         return qr_split
 
                     # case I.III sample in range but aboove quantile split
                     if split_val <= sample_val < upper_val:
-                        qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                              'upper_bound': upper_val,
-                                                                                              'lower_bound': split_val})
+                        qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                            'upper_bound': upper_val,
+                            'lower_bound': split_val})
                         return qr_split
 
                     # case I.IV Sample above all
@@ -1703,7 +1679,7 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                                                                                         'split_value': upper_val})
                         return q_split
 
-                elif split_val < lower_val:  #  case cat II: quantile split split below
+                elif split_val < lower_val:  # case cat II: quantile split split below
                     # II.1 split val below everything
                     if sample_val < split_val:
                         q_split = MergedQuantileSplit.new_from_other(other=self, state={'quantile': 0,
@@ -1712,15 +1688,15 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
 
                     # II.II ... between
                     if split_val <= sample_val < lower_val:
-                        qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                              'upper_bound': lower_val,
-                                                                                              'lower_bound': split_val})
+                        qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                            'upper_bound': lower_val,
+                            'lower_bound': split_val})
                         return qr_split
 
                     # II.III is in range
                     if self.is_sample_inside(sample):
                         return self.__copy__()
-                    
+
                     # II.IV above all
                     if sample_val >= upper_val:
                         q_split = MergedQuantileSplit.new_from_other(other=self, state={'quantile': 0,
@@ -1735,16 +1711,16 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
                         q_split = MergedQuantileSplit.new_from_other(other=self, state={'quantile': 0,
                                                                                         'split_value': lower_val})
                         return q_split
-                    
+
                     # III.II sample inside range
                     if self.is_sample_inside(sample):
                         return self.__copy__()
 
                     # III.III sample is above range but below quantile
                     if upper_val <= sample_val < split_val:
-                        qr_split = MergedQuantileRangeSplit.new_from_other(other=self, state={'quantile': 0,
-                                                                                              'upper_bound': split_val,
-                                                                                              'lower_bound': upper_val})
+                        qr_split = MergedRangeSplit.new_from_other(other=self, state={
+                            'upper_bound': split_val,
+                            'lower_bound': upper_val})
                         return qr_split
 
                     # III.IV above all
@@ -1755,15 +1731,62 @@ class AbstractQuantileRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin)
 
 
 @hide_in_ui
-class MergedQuantileRangeSplit(AbstractQuantileRangeSplit):
+class AbstractQuantileRangeSplit(AbstractRangeSplit):
+    """
+    Will divide the data into Quantiles and splits data laying inside a span of these or outside
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def get_help_text(cls):
+        return "Will divide the data into given amount of uniorm quantiles like:\n" \
+               "[Q1|Q2|Q3|Q4|Q5|....]. all pairs of interval boundaries are than evaluated to split the data" \
+               "being inside the interval or outside,\n e.g. Age is between 20 and 40"
+
+    @property
+    @abstractmethod
+    def quantile_count(self) -> int:
+        """
+        Gets the amount of bins that should be created
+        :return:
+        """
+        pass
+
+    def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs):
+
+        quantiles = self.quantile_count
+        assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 2342323)"
+
+        quantile_parts = [(q + 1) / (quantiles + 1) for q in range(quantiles + 1)]
+        quantile_vals = np.quantile(data_values, quantile_parts)
+        quantile_vals = list(set(list(quantile_vals)))  # this will remove doubled entries
+        results = []
+
+        for left_q in range(len(quantile_parts) - 1):
+            for right_q in range(left_q + 1, len(quantile_vals)):
+                left = (data_values >= quantile_vals[left_q]) & (data_values < quantile_vals[right_q])
+                results.append(({'lower_bound': quantile_vals[left_q],
+                                 'upper_bound': quantile_vals[right_q]},
+                                (left, ~left)))
+
+        return results
+
+
+@hide_in_ui
+class MergedRangeSplit(AbstractRangeSplit):
     """
     This split will only be generated by merging different rules
     :param AbstractQuantileRangeSplit:
     :return:
     """
-    @property
-    def quantile_count(self) -> int:
-        return 0
+
+    def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs) -> Optional[
+        typing.List[typing.Tuple[typing.Dict,
+                                 typing.Tuple[
+                                     np.ndarray]]]]:
+        raise Exception("MergedRangeSplit is a dummy split and CANNOT be used for building trees (Code: 823049823)")
 
 
 class TenQuantileRangeSplit(AbstractQuantileRangeSplit):
@@ -1842,12 +1865,14 @@ class SmallerThanSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
                 return [0]
             else:
                 return [1]
-    
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args, **kwargs):
+
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args,
+                                        **kwargs):
         left_vals = data_values_left < data_values_right
         state = {}
 
         return [(state, (left_vals, ~left_vals))]
+
 
 @hide_in_ui
 class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
@@ -1913,7 +1938,7 @@ class LessThanHalfOfSplit(AbstractNumericalSplit, TwoAttributeSplitMixin):
                 return [0]
             else:
                 return [1]
-    
+
     def _get_children_indexer_and_state(self,
                                         data_values_left: np.ndarray,
                                         data_values_right: np.ndarray, *args, **kwargs):
@@ -1930,8 +1955,21 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
     e.g. an attribute having 10 unique values will split in up tp 10 childs
     (Depending if node in question has all values inside)
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def _get_attribute_candidates(self) -> typing.List[int]:
+        """
+        Overriden function to also check we do not explode too much
+        :return:
+        """
+        candidates = super()._get_attribute_candidates()
+        candidates = [candidate for candidate in candidates if
+                      self.get_tree().get_unique_values_for_attribute(candidate) is not None]
+        # print(candidates)
+
+        return candidates
 
     def user_readable_description(self):
         """
@@ -1942,7 +1980,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         if state is not None:
             attr_name = self.get_split_attribute_name()
             lookup = state['label_to_node_idx_lookup']
-            return f"Split on categorical attribute {attr_name} with possible values: {', '.join([*lookup.keys()])}"
+            return f"Categorical attr. {attr_name} with possible values: {', '.join([*lookup.keys()])}"
         else:
             return "Single Category Split is not evaluated"
 
@@ -1953,7 +1991,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         labels = []
 
         for i in range(len(lookup)):
-            labels.append(reverse_dict[i])
+            labels.append(f"is {reverse_dict[i]}")
 
         return labels
 
@@ -1972,7 +2010,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
                        f"hence assigned to all childs"
             else:
                 attr_node = lookup[attr]
-                return f"{attr_name} has value {attr}, hence assigned it to node number {attr_node+1}"
+                return f"{attr_name} has value {attr}"
 
         else:
             raise Exception("Single Category Split Split not initialized, hence, "
@@ -2014,6 +2052,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
     Will to split like a NumericalSplit but only over #quantile threasholds
     implement specific version with quantile_count set
     """
+
     @property
     @abstractmethod
     def quantile_count(self) -> int:
@@ -2046,7 +2085,6 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
     def get_quantile(self) -> int:
         return self.get_state()['quantile']
 
-
     @check_initialized
     def explain_split(self, sample: np.ndarray, *args, **kwargs):
         hide_sample_specifics = False
@@ -2065,7 +2103,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             return f"Attribute {attr_name} is not available"
         else:
             if not hide_sample_specifics:
-                sample_specific_text =  f" (=Groups' {quantile_str}. Quantile)"
+                sample_specific_text = f" (=Groups' {quantile_str}. Quantile)"
             else:
                 sample_specific_text = ''
 
@@ -2096,7 +2134,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             if quantile_val != 0:
                 quantile_str = f"{quantile_val + 1}/{self.quantile_count + 1}"
                 return f"{attr_name} < " \
-                       f"{round(split_val, 2) } (=Groups' {quantile_str}. Quantile)"
+                       f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
             else:
                 return f"{attr_name} < " \
                        f"{round(split_val, 2)}"
@@ -2136,13 +2174,13 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
         return results
 
-    def _merge(self, other, sample: Optional[np.ndarray]=None):
+    def _merge(self, other, sample: Optional[np.ndarray] = None):
         if sample is None:
             if isinstance(other, AbstractQuantileSplit) and self.quantile_count >= other.quantile_count:
                 state_own = self.get_state()
                 state_other = other.get_state()
 
-                #if sample is None:  # case: no sample mode
+                # if sample is None:  # case: no sample mode
                 cpy = self.__copy__()
                 state_new = state_own.copy()
                 state_new['split_value'] = min(state_own['split_value'], state_other['split_value'])
@@ -2187,22 +2225,22 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
                 # case II: Between both -> range
                 if lower_val <= sample_val < upper_val:
-                    return MergedQuantileRangeSplit.new_from_other(other=self, state={'upper_bound': upper_val,
-                                                                               'lower_bound': lower_val})
+                    return MergedRangeSplit.new_from_other(other=self, state={'upper_bound': upper_val,
+                                                                              'lower_bound': lower_val})
 
                 # case III
                 if sample_val >= upper_val:
                     return upper.__copy__()
 
-
-
         return None
+
 
 @hide_in_ui
 class MergedQuantileSplit(AbstractQuantileSplit):
     @property
     def quantile_count(self) -> int:
         return 0
+
 
 class FiveQuantileSplit(AbstractQuantileSplit):
     @property
@@ -2223,6 +2261,7 @@ class TwentyQuantileSplit(AbstractQuantileSplit):
     def quantile_count(self):
         return 19
 
+
 @hide_in_ui
 class MedianSplit(AbstractQuantileSplit):
     """
@@ -2232,6 +2271,7 @@ class MedianSplit(AbstractQuantileSplit):
     @property
     def quantile_count(self):
         return 1
+
 
 @hide_in_ui
 class OneQuantileSplit(MedianSplit):
@@ -2271,10 +2311,10 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
             split_val = state['split_value']
 
             quantile_val = state['quantile']
-            quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+            quantile_str = f"{quantile_val + 1}/{self.quantile_count + 1}"
 
             return f"{attr_name_1} * {attr_name_2} < " \
-                   f"{round(split_val, 2) } (=Groups' {quantile_str}. Quantile)"
+                   f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             return "Multiplicative split is not initialized"
 
@@ -2299,7 +2339,7 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
             else:
                 split_val = state['split_value']
                 quantile_val = state['quantile']
-                quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+                quantile_str = f"{quantile_val + 1}/{self.quantile_count + 1}"
 
                 if (attr1 * attr2) < split_val:
                     return f"{attr_name_1} * {attr_name_2} <" \
@@ -2325,7 +2365,8 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
             else:
                 return [1]
 
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args, **kwargs):
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args,
+                                        **kwargs):
         quantiles = self.quantile_count
         assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 45645645)"
 
@@ -2344,11 +2385,13 @@ class AbstractMultiplicativeQuantileSplit(TwoAttributeSplitMixin, AbstractNumeri
 
         return results
 
+
 @hide_in_ui
 class MedianMultiplicativeQuantileSplit(AbstractMultiplicativeQuantileSplit):
     @property
     def quantile_count(self):
         return 1
+
 
 @hide_in_ui
 class TenQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
@@ -2356,11 +2399,13 @@ class TenQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
     def quantile_count(self):
         return 9
 
+
 @hide_in_ui
 class TwentyQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
     @property
     def quantile_count(self):
         return 19
+
 
 @hide_in_ui
 class FiveQuantileMultiplicativeSplit(AbstractMultiplicativeQuantileSplit):
@@ -2404,10 +2449,10 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
             split_val = state['split_value']
 
             quantile_val = state['quantile']
-            quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+            quantile_str = f"{quantile_val + 1}/{self.quantile_count + 1}"
 
             return f"{attr_name_1} + {attr_name_2} < " \
-                   f"{round(split_val, 2) } (=Groups' {quantile_str}. Quantile)"
+                   f"{round(split_val, 2)} (=Groups' {quantile_str}. Quantile)"
         else:
             return "Multiplicative split is not initialized"
 
@@ -2427,7 +2472,7 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
             else:
                 split_val = state['split_value']
                 quantile_val = state['quantile']
-                quantile_str = f"{quantile_val+1}/{self.quantile_count+1}"
+                quantile_str = f"{quantile_val + 1}/{self.quantile_count + 1}"
 
                 if (attr1 * attr2) < split_val:
                     return f"{attr_name_1} + < {attr_name_1} <" \
@@ -2453,7 +2498,8 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
             else:
                 return [1]
 
-    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args, **kwargs):
+    def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args,
+                                        **kwargs):
         quantiles = self.quantile_count
         assert isinstance(quantiles, int) and quantiles >= 1, "Quantiles must be integers >= 1 (Code: 34534534)"
 
@@ -2472,11 +2518,13 @@ class AbstractAdditiveQuantileSplit(TwoAttributeSplitMixin, AbstractNumericalSpl
 
         return results
 
+
 @hide_in_ui
 class MedianAdditiveQuantileSplit(AbstractAdditiveQuantileSplit):
     @property
     def quantile_count(self):
         return 1
+
 
 @hide_in_ui
 class TenQuantileAdditiveSplit(AbstractAdditiveQuantileSplit):
@@ -2484,17 +2532,20 @@ class TenQuantileAdditiveSplit(AbstractAdditiveQuantileSplit):
     def quantile_count(self):
         return 9
 
+
 @hide_in_ui
 class TwentyQuantileAdditiveSplit(AbstractAdditiveQuantileSplit):
     @property
     def quantile_count(self):
         return 19
 
+
 @hide_in_ui
 class FiveQuantileAdditiveSplit(AbstractAdditiveQuantileSplit):
     @property
     def quantile_count(self):
         return 4
+
 
 @hide_in_ui
 class FixedChainRule(AbstractSplitRule):
@@ -2540,7 +2591,7 @@ class FixedChainRule(AbstractSplitRule):
         rules_str_array = [str(rule[0].user_readable_description()) for rule in self._rules_and_expected_indices]
         rules_str = ''
         for i, rule_str in enumerate(rules_str_array):
-            rules_str += f'\n  ({i+1}) {rule_str}'
+            rules_str += f'\n  ({i + 1}) {rule_str}'
         return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps:" + rules_str
 
     def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
@@ -2612,7 +2663,8 @@ class FixedChainRule(AbstractSplitRule):
             # this will pickle the rule name (class name) and the _state attribute
             # together with the expected indices each
             data = cls._rules_and_expected_indices
-            d = {'rules_and_expected_indices': [(rule.__class__.__name__, rule._state, expected_indices) for rule, expected_indices in data],
+            d = {'rules_and_expected_indices': [(rule.__class__.__name__, rule._state, expected_indices) for
+                                                rule, expected_indices in data],
                  'name': cls._name,
                  'version': cls._version,
                  'attribute_names': cls._attribute_names}
@@ -2691,6 +2743,7 @@ class MultiplicativeSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumerical
     """
     Splits on attribute1 * attribute2 < attribute3
     """
+
     def get_edge_labels(self) -> typing.List[str]:
         attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
 
@@ -2743,8 +2796,8 @@ class MultiplicativeSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumerical
                                         data_values_left: np.ndarray,
                                         data_values_middle: np.ndarray,
                                         data_values_right: np.ndarray, *args, **kwargs) -> Optional[
-                                            typing.List[typing.Tuple[typing.Dict,
-                                                         typing.Tuple[np.ndarray]]]]:
+        typing.List[typing.Tuple[typing.Dict,
+                                 typing.Tuple[np.ndarray]]]]:
 
         left_indices = (data_values_left * data_values_left) < data_values_right
         return [({}, (left_indices, ~left_indices))]
@@ -2754,6 +2807,7 @@ class AdditiveSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit)
     """
     Splits on attribute1 + attribute2 < attribute3
     """
+
     def get_edge_labels(self) -> typing.List[str]:
         attr_name_1, attr_name_2, attr_name_3 = self.get_split_attribute_names()
 
@@ -2806,14 +2860,14 @@ class AdditiveSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit)
                                         data_values_left: np.ndarray,
                                         data_values_middle: np.ndarray,
                                         data_values_right: np.ndarray, *args, **kwargs) -> Optional[
-                                            typing.List[typing.Tuple[typing.Dict,
-                                                         typing.Tuple[np.ndarray]]]]:
+        typing.List[typing.Tuple[typing.Dict,
+                                 typing.Tuple[np.ndarray]]]]:
 
         left_indices = (data_values_left + data_values_left) < data_values_right
         return [({}, (left_indices, ~left_indices))]
 
 
-def get_available_split_rules(only_ui_rules: bool=True) -> typing.List[typing.Type[AbstractSplitRule]]:
+def get_available_split_rules(only_ui_rules: bool = True) -> typing.List[typing.Type[AbstractSplitRule]]:
     """
     Will return a list of classes of implemented split rules within THIS module
 
@@ -2849,7 +2903,7 @@ def get_class_by_name(name: str) -> Optional[typing.Type[AbstractSplitRule]]:
 
 def simplify_rules(rules: List[AbstractSplitRule],
                    sample: Optional[np.ndarray] = None,
-                   model_to_sample: Optional[Dict[any, np.ndarray]]= None):
+                   model_to_sample: Optional[Dict[any, np.ndarray]] = None):
     """
     Will try to merge rules together to receive a list of more easy rules
     can either supply all samples with @param sample or have each model see another sample by using the mapping
@@ -2873,8 +2927,8 @@ def simplify_rules(rules: List[AbstractSplitRule],
             sample_for_i = model_to_sample[tree_i]
         else:
             sample_for_i = sample
-            
-        for j in range(i+1, len(curr_rules)):
+
+        for j in range(i + 1, len(curr_rules)):
             if model_to_sample is not None:
                 tree_j = rules[j].get_tree()
                 sample_for_j = model_to_sample[tree_j]

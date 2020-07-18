@@ -373,7 +373,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 1.5]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, MergedQuantileRangeSplit, "is inside range -> should be MergedQuantileSplit")
+        self.assertIsInstance(rule, MergedRangeSplit, "is inside range -> should be MergedQuantileSplit")
         self.assertEqual(rule.get_upper_bound(), 2)
         self.assertEqual(rule.get_lower_bound(), 1)
 

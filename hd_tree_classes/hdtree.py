@@ -25,6 +25,8 @@ from .split_rule import AbstractSplitRule
 import logging
 from collections import Counter
 from graphviz import Digraph
+import pandas as pd
+from sklearn.metrics import accuracy_score
 
 
 class AbstractHDTree(ABC):
@@ -128,6 +130,19 @@ class AbstractHDTree(ABC):
     def get_max_level(self) -> int:
         return self._max_levels
 
+    def remove_node(self, node: Node):
+        assert self.is_fit(), "The tree is not fit, so you cannot remove nodes (39482304823)"
+        assert node is not self._node_head, "You cannot remove the head node (83293472)"
+
+    def is_node_inside(self, node: Node) -> bool:
+        """
+        Checks if we find the
+        :param node:
+        :return:
+        """
+        nodes = self.get_all_nodes_below_node()
+        return node in nodes
+
     def set_min_leaf_samples(self, min_samples: int):
         """
         Will set the minimum accepted  sample size at leafs but will
@@ -183,7 +198,7 @@ class AbstractHDTree(ABC):
     def is_fit(self) -> bool:
         return self._is_fit
 
-    def get_attribute_names(self) -> typing.List[str]:
+    def get_attribute_names(self) -> Optional[typing.List[str]]:
         return self._attribute_names
 
     def _output_message(self, message: str, only_if_verbose=True):
@@ -250,7 +265,7 @@ class AbstractHDTree(ABC):
 
         # each child contributes to the decision (eventually, atm not)
         sample_dict = {key: val for key, val in zip(self._attribute_names, sample)}
-        ret = f"Sample: \n {sample_dict}\n\n"
+        ret = f"Query: \n {sample_dict}\n\n"
 
         ret += f"Predicted sample as \"{self._predict_sample(sample=sample)}\" because of: \n"
 
@@ -265,8 +280,10 @@ class AbstractHDTree(ABC):
             path.reverse()
 
             for step, node in enumerate(path):
-                ret += f"Step {step + 1}: {node.explain_split(sample=sample)}\n"
-
+                ret += f"Step {step + 1}: {node.explain_split(sample=sample)}"
+                if node.is_leaf():
+                    ret += f' Vote for {self.get_possible_decisions_for_node(node=node)}'
+                ret += '\n'
             ret += '---------------------------------\n'
         return ret
 
@@ -338,7 +355,7 @@ class AbstractHDTree(ABC):
 
         return leafs
 
-    def prepare_fit(self, X, y):
+    def prepare_fit(self, X: np.ndarray, y: np.ndarray):
         """
         Will prepare the tree to the data but not actually fit it.
         May be used to check if fit would work out
@@ -346,6 +363,10 @@ class AbstractHDTree(ABC):
         :param y:
         :return:
         """
+        if not isinstance(X, np.ndarray) or not isinstance(y, np.ndarray):
+            raise TypeError("Data has to be in numpy array format!"
+                            " Please use data.values if its a pandas DataFrame or np.ndarray(data)"
+                            " if it is some Python iterable like a list (Code: 38420934)")
         self._labels = y
         self._train_data = X
         self._cached_predictions: typing.Dict = {}
@@ -521,21 +542,32 @@ class AbstractHDTree(ABC):
         attributes = []
         data = self.get_train_data()
         attribute = "other"
-        numeric_kinds = {'b',  # boolean
-                         'u',  # unsigned integer
-                         'i',  # signed integer
-                         'f',  # floats
-                         'c'}
+
+        #numeric_kinds = {'b',  # boolean
+        #                 'u',  # unsigned integer
+        #                 'i',  # signed integer
+        #                 'f',  # floats
+        #                 'c'}
 
         for i in range(data.shape[1]):
             vals = data[:, i]
-            none_type = type(None)
-            # numerical?
-            if vals.dtype.kind in numeric_kinds:
+
+            # try to parse to float
+            try:
+                vals.astype(np.float)
                 attribute = 'numerical'
+            except ValueError:
+                none_type = type(None)
+                if np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
+                    attribute = 'categorical'
+
+            #none_type = type(None)
+            # numerical?
+            #if vals.dtype.kind in numeric_kinds:
+            #    attribute = 'numerical'
             # categorical?
-            elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
-                attribute = 'categorical'
+            #elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
+            #    attribute = 'categorical'
 
             attributes.append(attribute)
 
@@ -563,7 +595,7 @@ class AbstractHDTree(ABC):
             return False, "There has to be at least one sample and at least one Attribute (Code: 4723984723894)"
 
         # create attribute names if not given
-        if self._attribute_names is None:
+        if self.get_attribute_names() is None:
             self._attribute_names = [f"Attribute {i + 1}" for i in range(0, data.shape[1])]
 
         # check if enough attribute names given
@@ -571,6 +603,7 @@ class AbstractHDTree(ABC):
             return False, "Amount of attribute names does not match amount of attributes in data (Code: 347823894)"
 
         attribute_types = self._guess_attribute_types()
+
         if not np.all([attr_type in ["categorical", "numerical"] for attr_type in attribute_types]):
             return False, "Attributes have to be numerical or categorical, however None is allowed as value (Code: 742398472398)"
 
@@ -610,10 +643,10 @@ class AbstractHDTree(ABC):
     def generate_dot_graph(self, label_lookup: Optional[typing.Dict[any, str]] = None,
                            show_trace_of_sample: Optional[np.ndarray] = None) -> Digraph:
         """
-        Returns the graphical representation of the tree
-        you can directly output it into jupyter notebook envs
-        or save it to disk in a variety of file formats
-        only works fully for classification at the moment
+        Returns the graphical representation of the tree.
+        Can directly drawn into jupyter notebooks
+        or saved to disk in a variety of file formats.
+        Only works fully for classification at the moment
 
         :param label_lookup: replaces labels with given values for vizualization (like 0 -> No, 1 -> Yes)
         :param show_trace_of_sample: if sample is given the nodes this sample flows through will be marked visually
@@ -642,7 +675,7 @@ class AbstractHDTree(ABC):
 
             rule = node.get_split_rule()
             if rule is not None:
-                description_text += f"\lRule: {str.strip(str(rule))}"
+                description_text += f"\lTest: {str.strip(str(rule))}"
 
             if self._supports_classification():
                 labels = node.get_labels()
@@ -802,16 +835,24 @@ class HDTreeClassifier(AbstractHDTree):
 
         return self.print_node(node=self._node_head, level=0, child_no=0)
 
-    def print_node(self, node: Node, level: int, child_no: int) -> str:
+    def print_node(self, node: Node, level: int, child_no: int, is_head=True) -> str:
         str = ''
-        str += ("-" * level) + f"Level {level}, Child: {child_no}: {node}\n"
+        if not is_head:
+            str += ("-" * level) + f"Level {level}, Child #{child_no}: {node}"
+        else:
+            str += f"Level {level}, ROOT: {node}"
+
         childs = node.get_children()
+        if childs is None or len(childs) == 0:
+            str += ' (LEAF)'
+
+        str += '\n'
 
         if childs:
             i = 1
             for child in childs:
                 # str += f"{level}.{i}:\n"
-                str += f'{self.print_node(node=child, level=level + 1, child_no=i)}'
+                str += f'{self.print_node(node=child, level=level + 1, child_no=i, is_head=False)}'
                 i += 1
 
         return str
@@ -846,7 +887,7 @@ class HDTreeClassifier(AbstractHDTree):
 
             return rets
 
-    def get_unique_values_for_attribute(self, attr_index) -> Optional[typing.Set]:
+    def get_unique_values_for_attribute(self, attr_index: int) -> Optional[typing.Set]:
         """
         Returns unique values for an attribute (excluding None)
         if values are floating the function will return None
@@ -856,7 +897,7 @@ class HDTreeClassifier(AbstractHDTree):
 
         Same happens if we just have more than 50 Values
 
-        @TODO make those two parameters of the split
+        @TODO make those two parameters parameters of the split and not static of the split
         :param attr_index: 
         :return: 
         """
@@ -864,7 +905,10 @@ class HDTreeClassifier(AbstractHDTree):
             data = self.get_train_data()[:, attr_index]
             uniques = set(data)
             uniques.discard(None)
-            if len(uniques) < 0.5 * len(data) or len(uniques) > 50:
+            count_non_none_elements = np.count_nonzero(data[~pd.isna(data)])
+            #if attr_index == 2:
+            #    print(count_non_none_elements, len(uniques), len(uniques) < 0.3 * count_non_none_elements or len(uniques) < 50)
+            if len(uniques) < 0.3 * count_non_none_elements or len(uniques) < 50:
                 self._cached_uniques[attr_index] = uniques
             else:
                 self._cached_uniques[attr_index] = None
@@ -897,6 +941,9 @@ class HDTreeClassifier(AbstractHDTree):
             return most_likely_class
         else:
             return self.get_prediction_for_node(node=target_nodes[0], probabilistic=True)
+
+    def score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        return accuracy_score(y_true=y_true, y_pred=y_pred)
 
     def predict(self,
                 X: np.ndarray,
@@ -1065,3 +1112,4 @@ class HDTreeClassifier(AbstractHDTree):
         :return:
         """
         return self._node_head
+
