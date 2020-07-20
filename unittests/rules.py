@@ -15,9 +15,9 @@
 # @created: 03.10.2019
 """
 import unittest
-from hdtree.hd_tree_classes.split_rule import *
-from hdtree.hd_tree_classes.information_measure import *
-from hdtree.hd_tree_classes.hdtree import HDTreeClassifier
+from hdtree.src.split_rule import *
+from hdtree.src.information_measure import *
+from hdtree.src.hdtree import HDTreeClassifier
 import pandas as pd
 import numpy as np
 import typing

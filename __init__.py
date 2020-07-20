@@ -14,10 +14,10 @@
 # @email: richard.vogel@hs-mittweida.de
 # @created: 29.10.2019
 """
-from .hd_tree_classes.hdtree import HDTreeClassifier
-from .hd_tree_classes.node import Node
-from .hd_tree_classes.information_measure import EntropyMeasure, RelativeAccuracyMeasure
-from .hd_tree_classes.split_rule import SmallerThanSplit, SingleCategorySplit, LessThanHalfOfSplit, \
+from .src.hdtree import HDTreeClassifier
+from .src.node import Node
+from .src.information_measure import EntropyMeasure, RelativeAccuracyMeasure
+from .src.split_rule import SmallerThanSplit, SingleCategorySplit, LessThanHalfOfSplit, \
     CloseToMedianSplit, FiveQuantileSplit, TenQuantileSplit, MedianSplit, TenQuantileMultiplicativeSplit, \
     MedianMultiplicativeQuantileSplit, FiveQuantileMultiplicativeSplit, FiveQuantileAdditiveSplit, \
     TenQuantileAdditiveSplit, MedianAdditiveQuantileSplit, TwentyQuantileAdditiveSplit, \

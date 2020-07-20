@@ -2702,7 +2702,7 @@ class FixedChainRule(AbstractSplitRule):
 
     @classmethod
     def from_node(cls, target_node: 'Node', name: str) -> typing.Type:
-        from hdtree.hd_tree_classes.node import Node
+        from hdtree.src.node import Node
 
         split_rules: typing.List[typing.Tuple[AbstractSplitRule, int]] = []
         while target_node.get_parent():

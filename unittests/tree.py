@@ -21,7 +21,7 @@ from os.path import join as pjoin
 import unittest
 import os
 from hdtree import *
-from hdtree.hd_tree_classes.hdtree import AbstractHDTree
+from hdtree.src.hdtree import AbstractHDTree
 
 
 class RulesTester(unittest.TestCase):
