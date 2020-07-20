@@ -38,11 +38,17 @@ class AbstractHDTree(ABC):
                  min_samples_at_leaf: Optional[int] = None,
                  verbose: bool = False):
         """
-        Will initialize the model with preparing state
+
+        :param allowed_splits: list of splits the tree may use while building itself
+        :param information_measure: measure on node purity
+        :param attribute_names: names of the features to be used later on. For display purposes mainly
+        :param max_levels: how many levels the tree may grow?
+        :param min_samples_at_leaf: how many data points the leaf nodes have to have?
+        :param verbose: print some messages while building?
         """
         self._train_data = None
         self._labels = None
-        self._node_head: Node = None
+        self._node_head: Optional[Node] = None
         self._min_samples_at_leaf = min_samples_at_leaf
         self._max_levels = max_levels
         self._allowed_splits = allowed_splits
@@ -101,10 +107,10 @@ class AbstractHDTree(ABC):
             # append list to iterate through children
             nodes_to_expand += child_copies
 
-        # prepent being fit already (we are, though parent tree may be fit)
+        # fake being fit already (we are, though parent tree may be fit)
         cpy_tree._is_fit = self.is_fit()
 
-        #cpy.fit(self.get_train_data(), self.get_train_labels())
+        # cpy.fit(self.get_train_data(), self.get_train_labels())
         return cpy_tree
 
     def map_attribute_indices_to_names(self, indices: typing.List[int]) -> typing.List[str]:
@@ -230,8 +236,8 @@ class AbstractHDTree(ABC):
         """
         assert self.is_fit(), "Tree is fit on data, hence cannot predict (Code: 2842094823)"
         assert len(X.shape) == 2, "Data has to be in format n_samples x n_features (Code: 234234234)"
-        assert X.shape[1] == len(self.get_attribute_names()), "Amount of labels has to match amount of " \
-                                                              "features (Code: 23842039482)"
+        assert X.shape[1] == len(self.get_attribute_names()), "Amount of attributes is not the same as " \
+                                                              "at training time (Code: 23842039482)"
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -371,7 +377,7 @@ class AbstractHDTree(ABC):
         self._train_data = X
         self._cached_predictions: typing.Dict = {}
         self._cached_uniques: typing.Dict[int, typing.Set] = {}
-        self.classes_ = [*np.unique(y)]
+        self.classes_ = [*set(y)]
 
         status, msg = self._check_preconditions()
         if status is False:
@@ -479,7 +485,7 @@ class AbstractHDTree(ABC):
 
             node_to_split.set_split_rule(best_split)
 
-    def get_all_nodes_below_node(self, node: Optional[Node]=None):
+    def get_all_nodes_below_node(self, node: Optional[Node] = None):
         """
         Will return all nodes under a given node
         if node is None will use head instead
@@ -543,7 +549,7 @@ class AbstractHDTree(ABC):
         data = self.get_train_data()
         attribute = "other"
 
-        #numeric_kinds = {'b',  # boolean
+        # numeric_kinds = {'b',  # boolean
         #                 'u',  # unsigned integer
         #                 'i',  # signed integer
         #                 'f',  # floats
@@ -561,12 +567,12 @@ class AbstractHDTree(ABC):
                 if np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
                     attribute = 'categorical'
 
-            #none_type = type(None)
+            # none_type = type(None)
             # numerical?
-            #if vals.dtype.kind in numeric_kinds:
+            # if vals.dtype.kind in numeric_kinds:
             #    attribute = 'numerical'
             # categorical?
-            #elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
+            # elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
             #    attribute = 'categorical'
 
             attributes.append(attribute)
@@ -796,7 +802,7 @@ class HDTreeClassifier(AbstractHDTree):
         is_str = [isinstance(l, str) or l is None for l in labels]
         if not np.all(is_str):
             # status = False
-            #self._output_message("Warning: Labels for classification "
+            # self._output_message("Warning: Labels for classification "
             #                     "should to be of type String. Please explicitly cast if needed "
             #                     "(e.g.: labels.astype(np.str)) "
             #                     "I will go on, but random errors may occur (Code: 8342792)", only_if_verbose=False)
@@ -906,7 +912,7 @@ class HDTreeClassifier(AbstractHDTree):
             uniques = set(data)
             uniques.discard(None)
             count_non_none_elements = np.count_nonzero(data[~pd.isna(data)])
-            #if attr_index == 2:
+            # if attr_index == 2:
             #    print(count_non_none_elements, len(uniques), len(uniques) < 0.3 * count_non_none_elements or len(uniques) < 50)
             if len(uniques) < 0.3 * count_non_none_elements or len(uniques) < 50:
                 self._cached_uniques[attr_index] = uniques
@@ -942,8 +948,14 @@ class HDTreeClassifier(AbstractHDTree):
         else:
             return self.get_prediction_for_node(node=target_nodes[0], probabilistic=True)
 
-    def score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        return accuracy_score(y_true=y_true, y_pred=y_pred)
+    def score(self, X: np.ndarray, y: np.ndarray) -> float:
+        """
+        Uses accuracy score to predict the models performance
+        :param X:
+        :param y:
+        :return:
+        """
+        return accuracy_score(y_true=self.predict(X).astype(np.str), y_pred=y.astype(np.str))
 
     def predict(self,
                 X: np.ndarray,
@@ -1072,7 +1084,7 @@ class HDTreeClassifier(AbstractHDTree):
 
         changed_happened = True
         while changed_happened:
-            changed_happened=False
+            changed_happened = False
             leafs = [node for node in me.get_all_nodes_below_node(node=None) if node.is_leaf()]
             for leaf in leafs:
                 parent = leaf.get_parent()
@@ -1112,4 +1124,3 @@ class HDTreeClassifier(AbstractHDTree):
         :return:
         """
         return self._node_head
-
