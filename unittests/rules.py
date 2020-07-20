@@ -401,7 +401,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 3.5]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample is within both -> one range split")
+        self.assertIsInstance(rule, MergedRangeSplit, "Sample is within both -> one range split")
         self.assertEqual(rule.get_lower_bound(), higher.get_lower_bound(), "New split should start above higher split")
         self.assertEqual(rule.get_upper_bound(), lower.get_upper_bound(), "New split should end below lower split")
 
@@ -409,7 +409,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 2]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample should be only in lower range")
+        self.assertIsInstance(rule, MergedRangeSplit, "Sample should be only in lower range")
         self.assertEqual(rule.get_lower_bound(), lower.get_lower_bound(), "New split should start at loweesz pos")
         self.assertEqual(rule.get_upper_bound(), higher.get_lower_bound(), "New split ")
 
@@ -417,7 +417,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 5.]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample only in higher range")
+        self.assertIsInstance(rule, MergedRangeSplit, "Sample only in higher range")
         self.assertEqual(rule.get_lower_bound(), lower.get_upper_bound(), "Should be the lowest thing after the "
                                                                           "thing we know its NOT inside")
         self.assertEqual(rule.get_upper_bound(), higher.get_upper_bound(), "highest thing")
@@ -448,7 +448,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., -0.5]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample between two ranges -> RangeSplit")
+        self.assertIsInstance(rule, MergedRangeSplit, "Sample between two ranges -> RangeSplit")
         self.assertEqual(rule.get_lower_bound(), lower.get_upper_bound(), "Should start at end of lower rule")
         self.assertEqual(rule.get_upper_bound(), higher.get_lower_bound(), "Should end at start of upper rule")
 
@@ -478,7 +478,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit, "Sample in range")
+        self.assertIsInstance(rule, MergedRangeSplit, "Sample in range")
         self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
         self.assertEqual(rule.get_upper_bound(), split1.get_split_value())
 
@@ -486,7 +486,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 5.5]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertIsInstance(rule, MergedRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split1.get_split_value())
         self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
 
@@ -521,7 +521,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 2]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertIsInstance(rule, MergedRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split1.get_split_value())
         self.assertEqual(rule.get_upper_bound(), split2.get_lower_bound())
 
@@ -529,7 +529,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertIsInstance(rule, MergedRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
         self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
 
@@ -565,7 +565,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertIsInstance(rule, MergedRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
         self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
 
@@ -573,7 +573,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 7]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, AbstractQuantileRangeSplit)
+        self.assertIsInstance(rule, MergedRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split2.get_upper_bound())
         self.assertEqual(rule.get_upper_bound(), split1.get_split_value())
 
@@ -685,7 +685,7 @@ class RulesTester(unittest.TestCase):
         res = simplify_rules([split_1, split_2, split_3], model_to_sample=lookup)
 
         self.assertEqual(len(res), 1, "Should melt down to one rule")
-        self.assertIsInstance(res[0], AbstractQuantileRangeSplit, "67 split should be eaten completely and the "
+        self.assertIsInstance(res[0], MergedRangeSplit, "67 split should be eaten completely and the "
                                                                   "other two should merge to appropriate range")
         self.assertEqual(res[0].get_state()['lower_bound'], 68)
         self.assertEqual(res[0].get_state()['upper_bound'], 75)
