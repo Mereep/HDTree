@@ -1742,7 +1742,7 @@ class AbstractQuantileRangeSplit(AbstractRangeSplit):
     @classmethod
     def get_help_text(cls):
         return "Will divide the data into given amount of uniorm quantiles like:\n" \
-               "[Q1|Q2|Q3|Q4|Q5|....]. all pairs of interval boundaries are than evaluated to split the data" \
+               "[Q1|Q2|Q3|Q4|Q5|....[. all pairs of interval boundaries are than evaluated to split the data" \
                "being inside the interval or outside,\n e.g. Age is between 20 and 40"
 
     @property

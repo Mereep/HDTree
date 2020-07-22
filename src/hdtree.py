@@ -539,14 +539,15 @@ class AbstractHDTree(ABC):
 
         return node
 
-    def _guess_attribute_types(self) -> typing.List[str]:
+    @classmethod
+    def guess_attribute_types(cls, data: np.ndarray) -> typing.List[str]:
         """
         Will check the handed over data and return
         the types of attributes in the data
         will return values categorical, numerical, other
         """
         attributes = []
-        data = self.get_train_data()
+        # data = self.get_train_data()
         attribute = "other"
 
         # numeric_kinds = {'b',  # boolean
@@ -608,7 +609,7 @@ class AbstractHDTree(ABC):
         if not len(self._attribute_names) == data.shape[1]:
             return False, "Amount of attribute names does not match amount of attributes in data (Code: 347823894)"
 
-        attribute_types = self._guess_attribute_types()
+        attribute_types = self.guess_attribute_types(data=self.get_train_data())
 
         if not np.all([attr_type in ["categorical", "numerical"] for attr_type in attribute_types]):
             return False, "Attributes have to be numerical or categorical, however None is allowed as value (Code: 742398472398)"
