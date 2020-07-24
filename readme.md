@@ -1,4 +1,4 @@
-#HDTree - Python implementation of a Decision Tree 
+# HDTree - Python implementation of a Decision Tree 
 
 ## Installation
 A directory containing this repository has to be put into your Python search path. Alternatively you can directly add the directory to your *site-packages* folder of your python interpreter.
