@@ -438,8 +438,8 @@ class AbstractHDTree(ABC):
         self._is_fit = True
 
     def _split_node(self, node_to_split: Node, level: int, min_samples_leaf: int = 1):
-        """
-        Does a node split
+        """ does an actual node split
+
         :param node_to_split:
         :param min_samples_leaf: ignore splits that produces leafs with less than that
         :param level: Current level we are within the corresponding tree (Counting from 0 for head)
@@ -464,7 +464,11 @@ class AbstractHDTree(ABC):
                             node_too_small = True
 
                     if not node_too_small:
-                        splits.append((score, splitter))
+                        if score >= node_to_split.get_score(): # ignore bad splits...
+                            splits.append((score, splitter))
+                        else:
+                            self._output_message(f"Split returned a worse result after applying. Will ignore "
+                                                 f"(Code: 24983490)")
 
         # get the best split
         # be aware that splits may be prioritized using their specificity value
@@ -482,7 +486,6 @@ class AbstractHDTree(ABC):
                         best_specificity = split.get_specificity()
                 else:  # since data is sorted if we reduce in performance we cannot do better -> leave to not eat more cycles
                     break
-
             node_to_split.set_split_rule(best_split)
 
     def get_all_nodes_below_node(self, node: Optional[Node] = None):

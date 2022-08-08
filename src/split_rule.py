@@ -72,6 +72,8 @@ class AbstractSplitRule(ABC):
 
     _hide_in_ui: bool = False
 
+    _extra_args = {}
+
     @classmethod
     def new_from_other(cls, other: 'AbstractSplitRule', state: Dict) -> 'AbstractSplitRule':
         """
@@ -86,6 +88,7 @@ class AbstractSplitRule(ABC):
         new._state = state
         new._is_evaluated = True
         new._child_nodes = other._child_nodes
+        new._extra_args = other._extra_args
 
         return new
 
@@ -476,7 +479,9 @@ class AbstractSplitRule(ABC):
                                 whitelist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None,
                                 blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None,
                                 min_level: int = 0,
-                                max_level: int = sys.maxsize):
+                                max_level: int = sys.maxsize,
+                                **extra_args,
+                                ):
         """
         Will generate the rule class as type with given restrictions
         :param whitelist_attribute_indices: If set, the rule will ONLY be applied to indices not involving the given list
@@ -494,8 +499,10 @@ class AbstractSplitRule(ABC):
             '_whitelist_attribute_indices': whitelist_attribute_indices,
             '_blacklist_attribute_indices': blacklist_attribute_indices,
             '_min_level': min_level,
-            '_max_level': max_level
+            '_max_level': max_level,
+            '_extra_args': extra_args.copy()
         })
+        # print(t._extra_args)
 
         return t
 
@@ -595,7 +602,7 @@ class AbstractSplitRule(ABC):
     def _merge(self, other, sample: Optional[np.ndarray] = None) -> Optional['AbstractSplitRule']:
         """
         If two rules can be reduced, method should return a rule that combines these two
-        don't use this function directly, use +-Operator instead
+        don't use this function directly, use `+`-Operator instead
 
         If sample is not given, a rule that satisfied both conditions is to be created.
         Otherwise a minimal rule that satisfied both conditions related to the rule has to be returned
@@ -636,6 +643,7 @@ class AbstractSplitRule(ABC):
         """
         If two splits yield the same performance,
         the split with the higher specificity will be chosen
+
         :return:
         """
         return 1
@@ -643,7 +651,7 @@ class AbstractSplitRule(ABC):
 
 class AbstractNumericalSplit(AbstractSplitRule):
     """
-    Represents a split over categorical attributes
+    Represents a split over numerical attributes
     """
 
     def _get_attribute_candidates(self) -> typing.List[int]:
@@ -660,7 +668,7 @@ class AbstractNumericalSplit(AbstractSplitRule):
 
 class AbstractCategoricalSplit(AbstractSplitRule):
     """
-    Represents a split over numerical attributes
+    Represents a split over categorical attributes
     """
 
     def _get_attribute_candidates(self) -> typing.List[int]:
@@ -1027,7 +1035,7 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                         has_null_entries = np.any(null_indexer)
                         state, assignments = ret
 
-                        assert isinstance(state, typing.Dict), "State mus be a dict (Code: 32942390)"
+                        assert isinstance(state, typing.Dict), "State must be a dict (Code: 32942390)"
                         assert isinstance(assignments, typing.Tuple), "Returned data has to be " \
                                                                       "a tuple or None (Code: 00756435345)"
                         assert len(assignments) >= 2, "A split has to generate at least two child nodes (" \
@@ -1058,9 +1066,12 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                             state['split_attribute_indices'] = [attr_idx]
                             self.set_child_nodes(child_nodes=child_nodes, force=True)
                             self.set_state(state)
-                            score = self.get_information_measure()(parent_node=self.get_node())
-
+                            # print("Assigned data indices", [len(ixs) for ixs in curr_child_indices])
+                            # print("Child node ids", [id(cn) for cn in child_nodes])
+                            score = self.get_information_measure()(parent_node=node)
+                            # print("Curr score", score, "234234234423")
                             if score > best_score:
+                                # print("Score from", best_score, "to", score, 32423)
                                 best_score = score
                                 best_children = self.get_child_nodes()
                                 best_state = state
@@ -1795,6 +1806,12 @@ class TenQuantileRangeSplit(AbstractQuantileRangeSplit):
         return 9
 
 
+class FiveQuantileRangeSplit(AbstractQuantileRangeSplit):
+    @property
+    def quantile_count(self) -> int:
+        return 4
+
+
 class TwentyQuantileRangeSplit(AbstractQuantileRangeSplit):
     @property
     def quantile_count(self) -> int:
@@ -1953,10 +1970,18 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
     """
     Will split on a single categorical attribute
     e.g. an attribute having 10 unique values will split in up tp 10 childs
+
     (Depending if node in question has all values inside)
+
+    Extra params:
+        - `display_max_attributes_length` cuts longer attribute listings while displaying
+        - `max_attributes`: will not split if sample has more than this amount of unique values
     """
 
     def __init__(self, *args, **kwargs):
+        self.display_max_attributes_length = self._extra_args.get('display_max_attributes_length', None)
+        self.max_attributes = self._extra_args.get('max_attributes', None)
+
         super().__init__(*args, **kwargs)
 
     def _get_attribute_candidates(self) -> typing.List[int]:
@@ -1967,7 +1992,6 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         candidates = super()._get_attribute_candidates()
         candidates = [candidate for candidate in candidates if
                       self.get_tree().get_unique_values_for_attribute(candidate) is not None]
-        # print(candidates)
 
         return candidates
 
@@ -1980,7 +2004,11 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         if state is not None:
             attr_name = self.get_split_attribute_name()
             lookup = state['label_to_node_idx_lookup']
-            return f"Categorical attr. {attr_name} with possible values: {', '.join([*lookup.keys()])}"
+            labels = ', '.join([*lookup.keys()])
+            if self.display_max_attributes_length is not None:
+                labels = labels[:self.display_max_attributes_length] + '...'
+
+            return f"Categorical attr. {attr_name} with possible values: {labels}"
         else:
             return "Single Category Split is not evaluated"
 
@@ -2035,8 +2063,9 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         node_indexer = []
         label_to_node_idx_lookup = {}
 
-        # only split if we have at least two distinct values
-        if len(distinct_node_labels) >= 2:
+        # only split if we have at least two distinct values (and optionally not more than handed over by extra args)
+        if len(distinct_node_labels) >= 2 and (self.max_attributes is None or len(distinct_node_labels) <= self.max_attributes):
+
             for i, lbl in enumerate(distinct_node_labels):
                 node_indexer.append(data_values == lbl)
                 label_to_node_idx_lookup[lbl] = i

@@ -104,7 +104,7 @@ class RelativeAccuracyMeasure(AbstractInformationMeasure):
         most_common_class = Counter(node_cats).most_common()[0][0]
         accuracy = sum(node_cats == most_common_class) / len(node_cats)
 
-        return accuracy
+        return (accuracy - 0.5) * 2.
 
 
 class EntropyMeasure(AbstractInformationMeasure):
@@ -128,11 +128,14 @@ class EntropyMeasure(AbstractInformationMeasure):
         n_total_samples = sum(len(node.get_labels()) for node in child_nodes)
         pureness_childs = 0.
 
+        # print("Child node ids", [id(cn) for cn in child_nodes], "ladsldasö33")
         for node in child_nodes:
             child_cats = node.get_labels()
-            entropie = self.calculate_for_single_node(node=node)
-            pureness_childs += entropie * len(child_cats)/n_total_samples
+            pureness = self.calculate_for_single_node(node=node)
+            # print(pureness, node)
+            pureness_childs += pureness * (len(child_cats) / n_total_samples)
 
+        # print(pureness_childs, "Total")
         return pureness_childs
 
     def calculate_for_labels(self, labels: np.ndarray, normalize=True):
@@ -141,19 +144,68 @@ class EntropyMeasure(AbstractInformationMeasure):
 
         # maximum clean if only one category
         if n_cats == 1:
-            return 1
+            return 1.
 
         counts = Counter(node_cats)
         val = 0
         n_samples = len(node_cats)
         for cls, amount in counts.items():
             p = amount / n_samples
-            val += p * np.log2(p)
+            part = p * np.log2(p)
+
+            # if normalize:
+            #     part /= np.log2(3)
+
+            val += part
+
+        #return 1 - val
 
         if normalize:
-            # normalize 0..1
-            p_worst = (n_samples / n_cats) / n_samples
-            max_entropy = (p_worst * np.log2(p_worst)) * n_cats
-            val = val / max_entropy
+            # normalize 0 .. 1
+            #p_worst = (n_samples / n_cats) / n_samples
+            #max_entropy = (p_worst * np.log2(p_worst)) * n_cats
+
+            max_entropy = (0.5 * np.log2(0.5)) * n_cats
+            val /= max_entropy
+
 
         return 1. - val
+
+
+class GiniMeasure(AbstractInformationMeasure):
+    """ Common Gini Score
+    as defined by sum_{p_i}(p_i^2)
+    """
+
+    def supports_regression(self):
+        return False
+
+    def supports_classification(self):
+        return True
+
+    def calculate_for_children(self, parent_node: Node):
+        child_nodes = parent_node.get_children()
+        if child_nodes is None:
+            child_nodes = []
+
+        node: Optional[Node] = None
+        # calculate accuracy for each node
+
+        n_total_samples = sum(len(node.get_labels()) for node in child_nodes)
+        pureness_childs = 0.
+        for node in child_nodes:
+            child_cats = node.get_labels()
+            accuracy = self.calculate_for_single_node(node=node)
+            pureness_childs += accuracy * len(child_cats)/n_total_samples
+
+        return pureness_childs
+
+    def calculate_for_labels(self, labels: np.ndarray, normalize: bool=True):
+        n_labels = len(labels)
+        counts = Counter(labels)
+
+        p = 0
+        for label, cnt in counts.items():
+            p += (cnt / n_labels) ** 2
+
+        return p

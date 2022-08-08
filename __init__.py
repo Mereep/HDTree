@@ -16,13 +16,14 @@
 """
 from .src.hdtree import HDTreeClassifier
 from .src.node import Node
-from .src.information_measure import EntropyMeasure, RelativeAccuracyMeasure
+from .src.information_measure import EntropyMeasure, RelativeAccuracyMeasure, AbstractInformationMeasure, GiniMeasure
 from .src.split_rule import SmallerThanSplit, SingleCategorySplit, LessThanHalfOfSplit, \
     CloseToMedianSplit, FiveQuantileSplit, TenQuantileSplit, MedianSplit, TenQuantileMultiplicativeSplit, \
     MedianMultiplicativeQuantileSplit, FiveQuantileMultiplicativeSplit, FiveQuantileAdditiveSplit, \
     TenQuantileAdditiveSplit, MedianAdditiveQuantileSplit, TwentyQuantileAdditiveSplit, \
     TwentyQuantileMultiplicativeSplit, TwentyQuantileSplit, get_available_split_rules, AbstractSplitRule, \
-    FixedValueSplit, get_class_by_name, FixedChainRule, TenQuantileRangeSplit, TwentyQuantileRangeSplit, simplify_rules
+    FixedValueSplit, get_class_by_name, FixedChainRule, TenQuantileRangeSplit, TwentyQuantileRangeSplit, \
+    simplify_rules, FiveQuantileRangeSplit
 
 __all__ = ['HDTreeClassifier',
            'Node',
@@ -32,6 +33,9 @@ __all__ = ['HDTreeClassifier',
 
            'EntropyMeasure',
            'RelativeAccuracyMeasure',
+           'AbstractInformationMeasure',
+           'GiniMeasure',
+
            'SmallerThanSplit',
            'SingleCategorySplit',
            'LessThanHalfOfSplit',
@@ -48,6 +52,7 @@ __all__ = ['HDTreeClassifier',
            'MedianMultiplicativeQuantileSplit',
            'FiveQuantileMultiplicativeSplit',
            'FiveQuantileAdditiveSplit',
+           'FiveQuantileRangeSplit',
            'TenQuantileAdditiveSplit',
            'MedianAdditiveQuantileSplit',
            'FixedValueSplit',
