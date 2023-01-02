@@ -58,7 +58,7 @@ class Node:
         if self.get_split_rule() is not None:
             cpy.set_split_rule(self.get_split_rule().__copy__())
             cpy.get_split_rule().set_node(cpy)
-            cpy.get_split_rule().set_child_nodes(child_nodes=self.get_children())
+            cpy.get_split_rule().set_child_nodes(child_nodes=self.get_children(), set_parent=True)
 
         return cpy
 
@@ -146,6 +146,8 @@ class Node:
         :return:
         """
         self.set_split_rule(rule=None)
+        if self.get_children() is not None:
+            self.set_children(childs=None)
 
     def __str__(self):
         children = "no children" if self.get_children() is None else f"{len(self.get_children())} children"

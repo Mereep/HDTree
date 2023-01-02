@@ -73,6 +73,7 @@ class AbstractHDTree(ABC):
         cpy_tree.prepare_fit(self.get_train_data(), self.get_train_labels())
 
         _head_node_cpy = self._node_head.__copy__()
+        # _head_node_cpy.set_tree(cpy_tree)
 
         # follow all nodes
         nodes_to_expand = [_head_node_cpy]
@@ -93,13 +94,13 @@ class AbstractHDTree(ABC):
             # copy all children of the node + set current nodes childs to copies of childs
             child_copies = []
             for child_of_cpy in childs_of_copy:
-                copy = child_of_cpy.__copy__()
+                copy_of_child_of_copy = child_of_cpy.__copy__()
                 # children_cpy = [child.__copy__() for child in childs_of_copy]
                 # copy.set_children(children_cpy)
-                copy.set_parent(curr_node)
-                if copy.get_split_rule() is not None:
-                    copy.get_split_rule().set_node(curr_node)
-                child_copies.append(copy)
+                copy_of_child_of_copy.set_parent(curr_node)
+                if copy_of_child_of_copy.get_split_rule() is not None:
+                    copy_of_child_of_copy.get_split_rule().set_node(copy_of_child_of_copy)
+                child_copies.append(copy_of_child_of_copy)
 
             if len(child_copies) > 0:
                 curr_node.set_children(child_copies)
@@ -234,7 +235,7 @@ class AbstractHDTree(ABC):
         :raises
         :return:
         """
-        assert self.is_fit(), "Tree is fit on data, hence cannot predict (Code: 2842094823)"
+        assert self.is_fit(), "Tree is not fit on data, hence cannot predict (Code: 2842094823)"
         assert len(X.shape) == 2, "Data has to be in format n_samples x n_features (Code: 234234234)"
         assert X.shape[1] == len(self.get_attribute_names()), "Amount of attributes is not the same as " \
                                                               "at training time (Code: 23842039482)"
@@ -486,6 +487,8 @@ class AbstractHDTree(ABC):
                         best_specificity = split.get_specificity()
                 else:  # since data is sorted if we reduce in performance we cannot do better -> leave to not eat more cycles
                     break
+
+            best_split.set_node(node_to_split)
             node_to_split.set_split_rule(best_split)
 
     def get_all_nodes_below_node(self, node: Optional[Node] = None):
@@ -561,15 +564,20 @@ class AbstractHDTree(ABC):
 
         for i in range(data.shape[1]):
             vals = data[:, i]
+            uniques = set(vals)
+            uniques.discard(None)
 
-            # try to parse to float
-            try:
-                vals.astype(np.float)
-                attribute = 'numerical'
-            except ValueError:
-                none_type = type(None)
-                if np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
-                    attribute = 'categorical'
+            if len(uniques) == 2: # boolean
+                attribute = 'categorical'
+            else:
+                # try to parse to float
+                try:
+                    vals.astype(np.float)
+                    attribute = 'numerical'
+                except ValueError:
+                    none_type = type(None)
+                    if np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
+                        attribute = 'categorical'
 
             # none_type = type(None)
             # numerical?
@@ -578,6 +586,8 @@ class AbstractHDTree(ABC):
             # categorical?
             # elif np.all([isinstance(val, (str, none_type)) or np.isnan(val) for val in vals]):
             #    attribute = 'categorical'
+
+            # print(i, attribute, "dasfsd")
 
             attributes.append(attribute)
 
@@ -784,7 +794,7 @@ class AbstractHDTree(ABC):
 
         return set(decisions)
 
-    def simplify(self):
+    def simplify(self, *args, **kwargs):
         """
         Will remove cut branches whose underlying decisions will not change no matter what leaf the sample might end up
         :return:
@@ -905,7 +915,8 @@ class HDTreeClassifier(AbstractHDTree):
         if the uniques are proportionally more than half of the samples than we will not consider it valid
         for the Fixed Value Split, since it doesn't seem too categorical
 
-        Same happens if we just have more than 50 Values
+        deprecated: Same happens if we just have more than 50 Values
+        new: if the # uniques >= 20 we also do NOT consider this as categorical, hence returning `None`
 
         @TODO make those two parameters parameters of the split and not static of the split
         :param attr_index: 
@@ -918,7 +929,7 @@ class HDTreeClassifier(AbstractHDTree):
             count_non_none_elements = np.count_nonzero(data[~pd.isna(data)])
             # if attr_index == 2:
             #    print(count_non_none_elements, len(uniques), len(uniques) < 0.3 * count_non_none_elements or len(uniques) < 50)
-            if len(uniques) < 0.3 * count_non_none_elements or len(uniques) < 50:
+            if len(uniques) < 0.1 * count_non_none_elements and len(uniques) < 20:
                 self._cached_uniques[attr_index] = uniques
             else:
                 self._cached_uniques[attr_index] = None
@@ -1011,7 +1022,7 @@ class HDTreeClassifier(AbstractHDTree):
 
         :return:
         """
-        assert self.is_fit(), "The tree is not fitted yet, hence has no Nodes inside (Code: 3298479823)"
+        assert self.is_fit(), "The tree was not fit yet, hence has no Nodes inside (Code: 3298479823)"
 
         # list of nodes still in need to be expanded
         nodes_to_expand: typing.List[Node] = [self._node_head]
@@ -1086,20 +1097,19 @@ class HDTreeClassifier(AbstractHDTree):
 
         me = self if not return_copy else self.__copy__()
 
-        changed_happened = True
-        while changed_happened:
-            changed_happened = False
+        change_happened = True
+        while change_happened:
+            change_happened = False
             leafs = [node for node in me.get_all_nodes_below_node(node=None) if node.is_leaf()]
             for leaf in leafs:
                 parent = leaf.get_parent()
 
-                # check if we try to cut head node
+                # check so we don't try to cut the head node
                 if parent is not None:
                     decisions = me.get_possible_decisions_for_node(node=parent)
                     if len(decisions) == 1:
-                        # we can could that guy
                         parent.make_leaf()
-                        changed_happened = True
+                        change_happened = True
 
         return me
 

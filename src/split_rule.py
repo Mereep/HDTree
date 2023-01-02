@@ -68,16 +68,22 @@ class AbstractSplitRule(ABC):
     # remove application of the rule from these
     _blacklist_attribute_indices: Optional[typing.List[typing.Union[str, int]]] = None
 
-    _state: Optional[Dict[str, any]] = None
+    _state: Optional[Dict[str, typing.Any]] = None
 
     _hide_in_ui: bool = False
 
     _extra_args = {}
 
+
+    @property
+    def extra_args(self) -> Dict[str, typing.Any]:
+        return self._extra_args
+
     @classmethod
     def new_from_other(cls, other: 'AbstractSplitRule', state: Dict) -> 'AbstractSplitRule':
         """
         Will create the rule like it would be in-place with the other rule
+
         :param other:
         :param state:
         :return:
@@ -331,6 +337,13 @@ class AbstractSplitRule(ABC):
         :param sample:
         :return:
         """
+        self.check_preconditions(sample)
+        return []
+
+    def check_preconditions(self, sample: np.ndarray):
+        """ Checks if the sample is valid for this rule,
+         will raise AssertionError if not
+        """
         assert self._is_evaluated, "This Rule was never fit on data (Code: 328420349823)"
         assert len(sample.shape) == 1, "Sample has to have exactly one dimension (Code: 2342344230)"
         assert len(sample) == len(self.get_tree().get_attribute_names()), "Amount of features does not match " \
@@ -338,7 +351,6 @@ class AbstractSplitRule(ABC):
 
         assert self.get_child_nodes() is not None and len(self.get_child_nodes()) > 1, "There are no child nodes " \
                                                                                        "attached (Code: 4564567)"
-        return []
 
     def get_child_node_index_for_sample(self, sample: np.ndarray) -> int:
         """
@@ -431,6 +443,14 @@ class AbstractSplitRule(ABC):
         :return:
         """
         self._state = state
+
+    def set_extra_args(self, extra_args: typing.Dict[str, any]):
+        """
+        Will set extra arguments that are passed to the split rule
+        :param extra_args:
+        :return:
+        """
+        self._extra_args = extra_args
 
     @classmethod
     def get_min_level(cls) -> int:
@@ -577,16 +597,16 @@ class AbstractSplitRule(ABC):
         if self.is_initialized():
             if not use_attribute_names or self.get_node() is None:
                 # merge if indices are the same, note if there is
-                # no tree option attribute names is silently over-writen
-                can_merge = self.get_split_attribute_indices() == other.get_split_attribute_indices()
+                # no tree option attribute names is silently over-written
+                maybe_can_merge = self.get_split_attribute_indices() == other.get_split_attribute_indices()
             else:  # merge if names are the same
                 split_names_left = [self.get_tree().get_attribute_names()[idx] for idx in
                                     self.get_split_attribute_indices()]
                 split_names_right = [other.get_tree().get_attribute_names()[idx] for idx in
                                      other.get_split_attribute_indices()]
-                can_merge = split_names_left == split_names_right
+                maybe_can_merge = split_names_left == split_names_right
 
-            if can_merge:
+            if maybe_can_merge:
                 res = self._merge(other, sample=sample)
                 if res is None and try_reverse:
                     # try other way around
@@ -1154,15 +1174,27 @@ class FixedValueSplit(OneAttributeSplitMixin):
             value = state['value']
             attr_idx = self.get_split_attribute_index()
             attr_name = self.get_split_attribute_name()
-
             attr_value = sample[attr_idx]
 
-            if attr_value == value:
-                return f"{attr_name} matches value {value}"
-            elif attr_value is None:
-                return f"{attr_name} has no value available"
+            # is tru-ish or fals-ish? --> Change display message a bit
+            display_value = value
+            if str(value) in ['0', '0.0', 'False']:
+                display_value = "False"
+            elif str(value) in ['1', '1.0', 'True']:
+                display_value = "True"
+
+            is_boolish = attr_value != display_value
+            if not is_boolish:
+                if attr_value == value:
+                    return f"{attr_name} matches value {display_value}"
+                return f"{attr_name} doesn't match value {display_value}"
             else:
-                return f"{attr_name} doesn't match value {value}"
+                if str(attr_value) == str(value):
+                    return f"{attr_name} is {display_value}"
+                return f"{attr_name} is not {display_value}"
+
+            return f"{attr_name} has no value available"
+
         else:
             raise Exception("Fixed Value split is not initialized, hence cannot explain decision (Code: 2983742893")
 
@@ -1301,12 +1333,12 @@ class FixedValueSplit(OneAttributeSplitMixin):
             elif isinstance(other, FixedValueSplit):
                 other_val = other.get_fixed_val()
 
-                # case I both are identical -> just eat one rule
+                # case I: both are identical -> just eat one rule
                 if own_val == other_val:
                     return FixedValueSplit.new_from_other(other=self,
                                                           state={'value': own_val})
 
-                # case II: agrees with self (and not both are the same) -> returns elf
+                # case II: agrees with self (and not both are the same) -> returns self
                 elif sample_val == own_val:
                     return FixedValueSplit.new_from_other(other=self,
                                                           state={'value': own_val})
@@ -2004,7 +2036,7 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         if state is not None:
             attr_name = self.get_split_attribute_name()
             lookup = state['label_to_node_idx_lookup']
-            labels = ', '.join([*lookup.keys()])
+            labels = ', '.join(str(key) for key in lookup.keys())
             if self.display_max_attributes_length is not None:
                 labels = labels[:self.display_max_attributes_length] + '...'
 
@@ -2038,7 +2070,19 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
                        f"hence assigned to all childs"
             else:
                 attr_node = lookup[attr]
-                return f"{attr_name} has value {attr}"
+
+                # special display for bool-ish values
+                attr_to_display = attr_node
+                if str(attr_to_display) in ['1', '1.0', 'True']:
+                    attr_to_display = "True"
+                elif str(attr_node) in ['0', '0.0', 'False']:
+                    attr_to_display = "False"
+                boolish = attr_to_display != attr_node
+
+                if boolish:
+                    return f"{attr_name} is {attr_to_display}"
+
+                return f"{attr_name} has value {attr_to_display}"
 
         else:
             raise Exception("Single Category Split Split not initialized, hence, "

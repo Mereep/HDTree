@@ -24,6 +24,8 @@ from .src.split_rule import SmallerThanSplit, SingleCategorySplit, LessThanHalfO
     TwentyQuantileMultiplicativeSplit, TwentyQuantileSplit, get_available_split_rules, AbstractSplitRule, \
     FixedValueSplit, get_class_by_name, FixedChainRule, TenQuantileRangeSplit, TwentyQuantileRangeSplit, \
     simplify_rules, FiveQuantileRangeSplit
+from .src import split_rule_service
+
 
 __all__ = ['HDTreeClassifier',
            'Node',
@@ -58,4 +60,7 @@ __all__ = ['HDTreeClassifier',
            'FixedValueSplit',
 
            'FixedChainRule',
-           'AbstractSplitRule']
+           'AbstractSplitRule',
+
+           'split_rule_service',
+           ]
