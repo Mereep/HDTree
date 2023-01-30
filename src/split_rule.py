@@ -89,7 +89,8 @@ class AbstractSplitRule(ABC):
         :return:
         """
         node = other.get_node()
-        new = cls(node=node)
+        # new = cls(node=node)
+        new = type(other.__class__.__name__, (cls,), dict(cls.__dict__))
         state['split_attribute_indices'] = other.get_state()['split_attribute_indices']
         new._state = state
         new._is_evaluated = True
@@ -590,7 +591,7 @@ class AbstractSplitRule(ABC):
         indices of both original rules at the same time!
         -
         :param other:
-        :param use_attribute_names: if set to True it will not availuate by attribute indices but will fetch their names
+        :param use_attribute_names: if set to True it will not avaluate by attribute indices but will fetch their names
                                     and merge them
         :return:
         """
@@ -773,7 +774,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
                             has_empty_child = False
                             for child_assignment in assignments:
                                 assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(
-                                    np.bool), \
+                                    bool), \
                                     "Assignments have to be a numpy array of type bool (Code: 39820934)"
 
                                 if not np.any(child_assignment):
@@ -924,7 +925,7 @@ class ThreeAttributeSplitMixin(AbstractSplitRule):
                                 for child_assignment in assignments:
                                     assert isinstance(child_assignment,
                                                       np.ndarray) and child_assignment.dtype is np.dtype(
-                                        np.bool), \
+                                        bool), \
                                         "Assignments have to be a numpy array of type bool (Code: 234234056)"
 
                                     if not np.any(child_assignment):
@@ -1065,7 +1066,7 @@ class OneAttributeSplitMixin(AbstractSplitRule):
                         has_empty_child = False
                         for child_assignment in assignments:
                             assert isinstance(child_assignment, np.ndarray) and child_assignment.dtype is np.dtype(
-                                np.bool), \
+                                bool), \
                                 "Assignments have to be a numpy array of type bool (Code: 39820934)"
 
                             if not np.any(child_assignment):
@@ -1386,10 +1387,10 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             else:
                 if abs(val - median) <= 0.5 * stddev:
                     return f"{attr_name} is close to groups' median of  " \
-                           f"{round(median, 2)} (± ½ × σ = {0.5 * round(stddev, 2)})"
+                           f"{round(median, 2)} (± ½ × σ = {round(stddev, 2)})"
                 else:
                     return f"{attr_name} is outside of groups' median of  " \
-                           f"{round(median, 2)} (± ½ × σ = {0.5 * round(stddev, 2)})"
+                           f"{round(median, 2)} (± ½ × σ = {round(stddev, 2)})"
         else:
             raise Exception("Close To Median Split not initialized, hence, "
                             "cannot explain a decision (Code: 234678234902347)")
@@ -1426,7 +1427,7 @@ class CloseToMedianSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
             stdev = state['stdev']
 
             return f"{attr_name} is close to groups' median of " \
-                   f"{median} (± ½ × σ = {0.5 * round(stdev, 2)})"
+                   f"{median} (± ½ × σ = {round(stdev, 2)})"
         else:
             return "Close To Median Split is not initialized"
 
@@ -1709,7 +1710,7 @@ class AbstractRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                             'lower_bound': lower_val})
                         return qr_split
 
-                    # case I.III sample in range but aboove quantile split
+                    # case I.III sample in range but above quantile split
                     if split_val <= sample_val < upper_val:
                         qr_split = MergedRangeSplit.new_from_other(other=self, state={
                             'upper_bound': upper_val,
@@ -1747,7 +1748,7 @@ class AbstractRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                         return q_split
 
                 elif upper_val < split_val:
-                    # Cat III rannge split below
+                    # Cat III range split is below
 
                     # III.I sample below all
                     if sample_val < lower_val:
@@ -2709,7 +2710,7 @@ class FixedChainRule(AbstractSplitRule):
         :param samples:
         :return:
         """
-        ret = np.ndarray(shape=(len(samples),), dtype=np.bool)
+        ret = np.ndarray(shape=(len(samples),), dtype=bool)
         for i, sample in enumerate(samples):
             accepts: bool = True
             for rule_dummy, expected_index in self._rules_and_expected_indices:

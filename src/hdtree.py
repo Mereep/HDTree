@@ -263,7 +263,7 @@ class AbstractHDTree(ABC):
         """
         pass
 
-    def explain_decision(self, sample: np.ndarray) -> np.str:
+    def explain_decision(self, sample: np.ndarray) -> str:
         """
         Returns a human readable decision
         :return:
@@ -572,7 +572,7 @@ class AbstractHDTree(ABC):
             else:
                 # try to parse to float
                 try:
-                    vals.astype(np.float)
+                    vals.astype(float)
                     attribute = 'numerical'
                 except ValueError:
                     none_type = type(None)
@@ -611,8 +611,11 @@ class AbstractHDTree(ABC):
         if not len(labels.shape) == 1:
             return False, "Labels have to be in format (n_samples) (Code: 23874092374)"
 
-        if not data.shape[0] > 0 or not data.shape[1] > 0:
-            return False, "There has to be at least one sample and at least one Attribute (Code: 4723984723894)"
+        if not data.shape[0] > 0:
+            return False, "No samples available, i.e., no rows (Code: 8423982034923)"
+
+        if not data.shape[1] > 0:
+            return False, "There are no attributes in the data, i.e., no columns (Code: 374892374892)"
 
         # create attribute names if not given
         if self.get_attribute_names() is None:
@@ -818,7 +821,7 @@ class HDTreeClassifier(AbstractHDTree):
             # status = False
             # self._output_message("Warning: Labels for classification "
             #                     "should to be of type String. Please explicitly cast if needed "
-            #                     "(e.g.: labels.astype(np.str)) "
+            #                     "(e.g.: labels.astype(str)) "
             #                     "I will go on, but random errors may occur (Code: 8342792)", only_if_verbose=False)
             pass
 
@@ -970,7 +973,7 @@ class HDTreeClassifier(AbstractHDTree):
         :param y:
         :return:
         """
-        return accuracy_score(y_true=self.predict(X).astype(np.str), y_pred=y.astype(np.str))
+        return accuracy_score(y_true=self.predict(X).astype(str), y_pred=y.astype(str))
 
     def predict(self,
                 X: np.ndarray,
@@ -979,9 +982,9 @@ class HDTreeClassifier(AbstractHDTree):
         self._check_predict_preconditions(X=X)
 
         if probabilistic:
-            res = np.ndarray(shape=(len(X), len(self.classes_)), dtype=np.float)
+            res = np.ndarray(shape=(len(X), len(self.classes_)), dtype=float)
         else:
-            res = np.ndarray(shape=(len(X),), dtype=np.object)
+            res = np.ndarray(shape=(len(X),), dtype=np.object_)
 
         for i in range(len(X)):
             pred = self._predict_sample(
@@ -996,7 +999,7 @@ class HDTreeClassifier(AbstractHDTree):
             return res
         else:
             # having it as str from initialization doesnt work
-            return res.astype(np.str)
+            return res.astype(str)
 
     def predict_proba(self, X: np.ndarray):
         """
@@ -1055,7 +1058,7 @@ class HDTreeClassifier(AbstractHDTree):
             raise Exception("Feature importance is evaluated using a fitted tree, please fit it first" \
                             " (Code: 3284723984)")
 
-        importances = np.zeros(shape=(self.get_feature_count()), dtype=np.float)
+        importances = np.zeros(shape=(self.get_feature_count()), dtype=float)
         nodes = self.get_all_nodes()
 
         if len(nodes) > 0 and nodes[0].get_split_rule().is_initialized():
