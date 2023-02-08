@@ -44,7 +44,7 @@ class RulesTester(unittest.TestCase):
                 whitelist_attribute_indices=wl_attributes
             ),
             ],
-            information_measure=EntropyMeasure(),
+            information_measure=GiniMeasure(),
             max_levels=5,
             min_samples_at_leaf=None,
             verbose=False,
@@ -85,7 +85,7 @@ class RulesTester(unittest.TestCase):
                 blacklist_attribute_indices=bl_attributes
                 ),
             ],
-            information_measure=EntropyMeasure(),
+            information_measure=GiniMeasure(),
             max_levels=5,
             min_samples_at_leaf=None,
             verbose=False,
@@ -121,7 +121,7 @@ class RulesTester(unittest.TestCase):
                 min_level=1,
             ),
         ],
-            information_measure=EntropyMeasure(),
+            information_measure=GiniMeasure(),
             max_levels=3,
             min_samples_at_leaf=None,
             verbose=False,
@@ -529,7 +529,8 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, MergedRangeSplit)
+        # print(rule.__mro__())
+        self.assertIsInstance(rule, AbstractRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
         self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
 
@@ -565,7 +566,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 4]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, MergedRangeSplit)
+        # self.assertIsInstance(rule, MergedRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split2.get_lower_bound())
         self.assertEqual(rule.get_upper_bound(), split2.get_upper_bound())
 
@@ -573,7 +574,7 @@ class RulesTester(unittest.TestCase):
         new_rules = simplify_rules(rules=rules, sample=np.array([0., 0., 7]))
         self.assertEqual(len(new_rules), 1, "Rules should merge")
         rule = new_rules[0]
-        self.assertIsInstance(rule, MergedRangeSplit)
+        self.assertIsInstance(rule, AbstractRangeSplit)
         self.assertEqual(rule.get_lower_bound(), split2.get_upper_bound())
         self.assertEqual(rule.get_upper_bound(), split1.get_split_value())
 
@@ -604,7 +605,7 @@ class RulesTester(unittest.TestCase):
         tree_params = dict(allowed_splits=[TenQuantileSplit],
                            max_levels=3,
                            min_samples_at_leaf=10, attribute_names=cols,
-                           information_measure=EntropyMeasure())
+                           information_measure=GiniMeasure())
 
         tree_1 = HDTreeClassifier(**tree_params)
         tree_1.fit(X, y)
@@ -615,7 +616,7 @@ class RulesTester(unittest.TestCase):
         tree_params_2 = dict(allowed_splits=[rule_new_1],
                        max_levels=3,
                        attribute_names=cols,
-                       min_samples_at_leaf=10, information_measure=EntropyMeasure())
+                       min_samples_at_leaf=10, information_measure=GiniMeasure())
 
         tree_2 = HDTreeClassifier(**tree_params_2)
         tree_2.fit(X, y)

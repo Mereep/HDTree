@@ -91,13 +91,16 @@ class AbstractSplitRule(ABC):
         node = other.get_node()
         # new = cls(node=node)
         new = type(other.__class__.__name__, (cls,), dict(cls.__dict__))
-        state['split_attribute_indices'] = other.get_state()['split_attribute_indices']
-        new._state = state
-        new._is_evaluated = True
-        new._child_nodes = other._child_nodes
-        new._extra_args = other._extra_args
 
-        return new
+
+        new_instance =  new(node=node)
+        state['split_attribute_indices'] = other.get_state()['split_attribute_indices']
+        new_instance._state = state
+        new_instance._is_evaluated = True
+        new_instance._child_nodes = other._child_nodes
+        new_instance._extra_args = other._extra_args
+
+        return new_instance
 
     @classmethod  # tbh that doesnt belong here, or may be renamed to something more generic
     def show_in_ui(cls) -> bool:
@@ -1589,7 +1592,7 @@ class AbstractRangeSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                 return f"value for {attr_name} is not available, hence assigned to all children"
             else:
                 if lower <= val < upper:
-                    return f"{attr_name} is INSIDE range [{lower:.2f}, ... {upper:.2f}["
+                    return f"{attr_name} is INSIDE range [{lower:.2f}, ..., {upper:.2f}["
                 else:
                     if val < lower:
                         way = 'below'
@@ -2248,7 +2251,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
 
         return results
 
-    def _merge(self, other, sample: Optional[np.ndarray] = None):
+    def _merge(self, other, sample: Optional[np.ndarray] = None) -> Optional['AbstractSplitRule']:
         if sample is None:
             if isinstance(other, AbstractQuantileSplit) and self.quantile_count >= other.quantile_count:
                 state_own = self.get_state()
@@ -2302,7 +2305,7 @@ class AbstractQuantileSplit(AbstractNumericalSplit, OneAttributeSplitMixin):
                     return MergedRangeSplit.new_from_other(other=self, state={'upper_bound': upper_val,
                                                                               'lower_bound': lower_val})
 
-                # case III
+                # case III above both
                 if sample_val >= upper_val:
                     return upper.__copy__()
 
@@ -3017,7 +3020,7 @@ def simplify_rules(rules: List[AbstractSplitRule],
                                             use_attribute_names=True)
 
             # hit (we could merge)
-            if isinstance(rule_new, AbstractSplitRule):
+            if not isinstance(rule_new, tuple) and isinstance(rule_new, AbstractSplitRule):
                 # remove the consumed rules
                 curr_rules.remove(rules[i])
                 curr_rules.remove(rules[j])
