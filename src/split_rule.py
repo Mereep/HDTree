@@ -74,7 +74,6 @@ class AbstractSplitRule(ABC):
 
     _extra_args = {}
 
-
     @property
     def extra_args(self) -> Dict[str, typing.Any]:
         return self._extra_args
@@ -92,8 +91,7 @@ class AbstractSplitRule(ABC):
         # new = cls(node=node)
         new = type(other.__class__.__name__, (cls,), dict(cls.__dict__))
 
-
-        new_instance =  new(node=node)
+        new_instance = new(node=node)
         state['split_attribute_indices'] = other.get_state()['split_attribute_indices']
         new_instance._state = state
         new_instance._is_evaluated = True
@@ -582,9 +580,9 @@ class AbstractSplitRule(ABC):
 
     def __add__(self, other: 'AbstractSplitRule', use_attribute_names: bool = True,
                 sample: Optional[np.ndarray] = None, try_reverse: bool = True) -> Optional[Union['AbstractSplitRule',
-                                                                                                 Tuple[
-                                                                                                     'AbstractSplitRule',
-                                                                                                     'AbstractSplitRule']]]:
+    Tuple[
+        'AbstractSplitRule',
+        'AbstractSplitRule']]]:
         """
         Will try to Merge to split rules.
         If success it will return ONE split rule that is combining the both rules, otherwise will return
@@ -818,7 +816,7 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
     def _get_children_indexer_and_state(self, data_values_left: np.ndarray, data_values_right: np.ndarray, *args,
                                         **kwargs) -> Optional[
         typing.Tuple[typing.Dict,
-                     typing.Tuple[np.ndarray, ...]]]:
+        typing.Tuple[np.ndarray, ...]]]:
         """
         Returns for each child no
         :param data_values_left:
@@ -971,7 +969,7 @@ class ThreeAttributeSplitMixin(AbstractSplitRule):
                                         data_values_middle: np.ndarray,
                                         data_values_right: np.ndarray) -> Optional[
         typing.List[typing.Tuple[typing.Dict,
-                                 typing.Tuple[np.ndarray]]]]:
+        typing.Tuple[np.ndarray]]]]:
         """
 
         :param data_values_left:
@@ -1111,8 +1109,8 @@ class OneAttributeSplitMixin(AbstractSplitRule):
     @abstractmethod
     def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs) -> Optional[
         typing.List[typing.Tuple[typing.Dict,
-                                 typing.Tuple[
-                                     np.ndarray]]]]:
+        typing.Tuple[
+            np.ndarray]]]]:
         """
         Returns for each child the state and indices for each possible realization over the data
         :param data_values:
@@ -1182,10 +1180,17 @@ class FixedValueSplit(OneAttributeSplitMixin):
 
             # is tru-ish or fals-ish? --> Change display message a bit
             display_value = value
-            if str(value) in ['0', '0.0', 'False']:
-                display_value = "False"
-            elif str(value) in ['1', '1.0', 'True']:
-                display_value = "True"
+
+            try:
+                # if we have only zero and one we assume it is boolean
+                if np.all((self.get_tree().get_train_data()[:, attr_idx] == 0) | (
+                        self.get_tree().get_train_data()[:, attr_idx] == 1)):
+                    if str(value) in ['0', '0.0', 'False']:
+                        display_value = "False"
+                    elif str(value) in ['1', '1.0', 'True']:
+                        display_value = "True"
+            except:
+                pass
 
             is_boolish = attr_value != display_value
             if not is_boolish:
@@ -1193,8 +1198,17 @@ class FixedValueSplit(OneAttributeSplitMixin):
                     return f"{attr_name} matches value {display_value}"
                 return f"{attr_name} doesn't match value {display_value}"
             else:
+                # remove .0 from XY.0 if numeric
+                try:
+                    float(value)
+                    if str(display_value).endswith(".0"):
+                        display_value = str(display_value)[:-2]
+                except:
+                    pass
+
                 if str(attr_value) == str(value):
                     return f"{attr_name} is {display_value}"
+
                 return f"{attr_name} is not {display_value}"
 
             return f"{attr_name} has no value available"
@@ -1831,8 +1845,8 @@ class MergedRangeSplit(AbstractRangeSplit):
 
     def _get_children_indexer_and_state(self, data_values: np.ndarray, *args, **kwargs) -> Optional[
         typing.List[typing.Tuple[typing.Dict,
-                                 typing.Tuple[
-                                     np.ndarray]]]]:
+        typing.Tuple[
+            np.ndarray]]]]:
         raise Exception("MergedRangeSplit is a dummy split and CANNOT be used for building trees (Code: 823049823)")
 
 
@@ -2112,7 +2126,8 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
         label_to_node_idx_lookup = {}
 
         # only split if we have at least two distinct values (and optionally not more than handed over by extra args)
-        if len(distinct_node_labels) >= 2 and (self.max_attributes is None or len(distinct_node_labels) <= self.max_attributes):
+        if len(distinct_node_labels) >= 2 and (
+                self.max_attributes is None or len(distinct_node_labels) <= self.max_attributes):
 
             for i, lbl in enumerate(distinct_node_labels):
                 node_indexer.append(data_values == lbl)
@@ -2874,7 +2889,7 @@ class MultiplicativeSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumerical
                                         data_values_middle: np.ndarray,
                                         data_values_right: np.ndarray, *args, **kwargs) -> Optional[
         typing.List[typing.Tuple[typing.Dict,
-                                 typing.Tuple[np.ndarray]]]]:
+        typing.Tuple[np.ndarray]]]]:
 
         left_indices = (data_values_left * data_values_left) < data_values_right
         return [({}, (left_indices, ~left_indices))]
@@ -2938,7 +2953,7 @@ class AdditiveSmallerThanSplit(ThreeAttributeSplitMixin, AbstractNumericalSplit)
                                         data_values_middle: np.ndarray,
                                         data_values_right: np.ndarray, *args, **kwargs) -> Optional[
         typing.List[typing.Tuple[typing.Dict,
-                                 typing.Tuple[np.ndarray]]]]:
+        typing.Tuple[np.ndarray]]]]:
 
         left_indices = (data_values_left + data_values_left) < data_values_right
         return [({}, (left_indices, ~left_indices))]

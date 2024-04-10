@@ -72,47 +72,51 @@ class AbstractHDTree(ABC):
 
         cpy_tree.prepare_fit(self.get_train_data(), self.get_train_labels())
 
-        _head_node_cpy = self._node_head.__copy__()
-        # _head_node_cpy.set_tree(cpy_tree)
+        cpy_tree.fit(self.get_train_data(), self.get_train_labels())
 
-        # follow all nodes
-        nodes_to_expand = [_head_node_cpy]
-
-        while len(nodes_to_expand) > 0:
-            curr_node = nodes_to_expand.pop()
-
-            # is it the head node?
-            if curr_node.get_parent() is None:
-                cpy_tree._node_head = curr_node
-
-            # assign tree to copy
-            curr_node.set_tree(cpy_tree)
-
-            # get childs of the current node (if any)
-            childs_of_copy = curr_node.get_children() or []
-
-            # copy all children of the node + set current nodes childs to copies of childs
-            child_copies = []
-            for child_of_cpy in childs_of_copy:
-                copy_of_child_of_copy = child_of_cpy.__copy__()
-                # children_cpy = [child.__copy__() for child in childs_of_copy]
-                # copy.set_children(children_cpy)
-                copy_of_child_of_copy.set_parent(curr_node)
-                if copy_of_child_of_copy.get_split_rule() is not None:
-                    copy_of_child_of_copy.get_split_rule().set_node(copy_of_child_of_copy)
-                child_copies.append(copy_of_child_of_copy)
-
-            if len(child_copies) > 0:
-                curr_node.set_children(child_copies)
-
-            # append list to iterate through children
-            nodes_to_expand += child_copies
-
-        # fake being fit already (we are, though parent tree may be fit)
-        cpy_tree._is_fit = self.is_fit()
-
-        # cpy.fit(self.get_train_data(), self.get_train_labels())
         return cpy_tree
+
+        # _head_node_cpy = self._node_head.__copy__()
+        # # _head_node_cpy.set_tree(cpy_tree)
+
+        # # follow all nodes
+        # nodes_to_expand = [_head_node_cpy]
+
+        # while len(nodes_to_expand) > 0:
+        #     curr_node = nodes_to_expand.pop()
+
+        #     # is it the head node?
+        #     if curr_node.get_parent() is None:
+        #         cpy_tree._node_head = curr_node
+
+        #     # assign tree to copy
+        #     curr_node.set_tree(cpy_tree)
+
+        #     # get childs of the current node (if any)
+        #     childs_of_copy = curr_node.get_children() or []
+
+        #     # copy all children of the node + set current nodes childs to copies of childs
+        #     child_copies = []
+        #     for child_of_cpy in childs_of_copy:
+        #         copy_of_child_of_copy = child_of_cpy.__copy__()
+        #         # children_cpy = [child.__copy__() for child in childs_of_copy]
+        #         # copy.set_children(children_cpy)
+        #         copy_of_child_of_copy.set_parent(curr_node)
+        #         if copy_of_child_of_copy.get_split_rule() is not None:
+        #             copy_of_child_of_copy.get_split_rule().set_node(copy_of_child_of_copy)
+        #         child_copies.append(copy_of_child_of_copy)
+
+        #     if len(child_copies) > 0:
+        #         curr_node.set_children(child_copies)
+
+        #     # append list to iterate through children
+        #     nodes_to_expand += child_copies
+
+        # # fake being fit already (we are, though parent tree may be fit)
+        # cpy_tree._is_fit = self.is_fit()
+
+        # # cpy.fit(self.get_train_data(), self.get_train_labels())
+        # return cpy_tree
 
     def map_attribute_indices_to_names(self, indices: typing.List[int]) -> typing.List[str]:
         """
