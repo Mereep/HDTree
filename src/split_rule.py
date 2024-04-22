@@ -25,6 +25,7 @@ import inspect
 from functools import wraps
 import typing
 from typing import Optional, Union, Tuple, List, Dict
+from .exceptions.split import HDTreeSplitException
 
 
 # ANNOTATIONS
@@ -358,11 +359,15 @@ class AbstractSplitRule(ABC):
         """
         Will return just the index number of the child
         if more than one child exists an assertion will be raised
+        
         :param sample: 
         :return: 
         """
         childs = self.get_child_node_indices_for_sample(sample=sample)
-        assert len(childs) == 1, "There is more than one child (Code: 84723402839)"
+        if len(childs) > 1:
+            raise HDTreeSplitException(
+                f"There is more than one child returned for data point {sample} for value at index `{self.get_state()['split_attribute_indices']}`",
+                code=7823489723589)
 
         return childs[0]
 
@@ -835,7 +840,8 @@ class TwoAttributeSplitMixin(AbstractSplitRule):
                                              "(Code: 34233756446)"
         state = self.get_state()
         if 'split_attribute_indices' not in state:
-            raise Exception("There is no valid split index set in state, this is a programming error! (Code: 3422534)")
+            raise HDTreeSplitException("There is no valid split index set in state, this is a programming error!",
+                                       code=3422534)
 
         return self.get_state()['split_attribute_indices']
 
@@ -989,7 +995,8 @@ class ThreeAttributeSplitMixin(AbstractSplitRule):
                                              "(Code: 34233756446)"
         state = self.get_state()
         if 'split_attribute_indices' not in state:
-            raise Exception("There is no valid split index set in state, this is a programming error! (Code: 3422534)")
+            raise HDTreeSplitException("There is no valid split index set in state, this is a programming error!",
+                                       code=3422534)
 
         return self.get_state()['split_attribute_indices']
 
@@ -2087,15 +2094,14 @@ class SingleCategorySplit(AbstractCategoricalSplit, OneAttributeSplitMixin):
                 return f"{attr_name} with value {attr} was not available at that stage during training, " \
                        f"hence assigned to all childs"
             else:
-                attr_node = lookup[attr]
 
                 # special display for bool-ish values
-                attr_to_display = attr_node
+                attr_to_display = attr
                 if str(attr_to_display) in ['1', '1.0', 'True']:
                     attr_to_display = "True"
-                elif str(attr_node) in ['0', '0.0', 'False']:
+                elif str(attr_to_display) in ['0', '0.0', 'False']:
                     attr_to_display = "False"
-                boolish = attr_to_display != attr_node
+                boolish = attr_to_display != attr
 
                 if boolish:
                     return f"{attr_name} is {attr_to_display}"
@@ -2684,14 +2690,14 @@ class FixedChainRule(AbstractSplitRule):
         rules_str = ''
         for i, rule_str in enumerate(rules_str_array):
             rules_str += f'\n  ({i + 1}) {rule_str}'
-        return f"Chain rule \'{self._name}\' consisting of {len(self._rules_and_expected_indices)} steps:" + rules_str
+        return f"Chain rule '{self._name}' consisting of {len(self._rules_and_expected_indices)} steps:" + rules_str
 
     def explain_split(self, sample: np.ndarray, *args, **kwargs) -> str:
         res = self._execute(samples=sample.reshape((1, -1)))[0]
         if res:
-            return f"Chain rule \ \'{self._name}\' did pass"
+            return f"Chain rule '{self._name}' did pass"
         else:
-            return f"Chain rule \ \'{self._name}\' did NOT pass"
+            return f"Chain rule '{self._name}' did NOT pass"
 
     def get_child_node_indices_for_sample(self, sample: np.ndarray):
         if self._execute(sample.reshape((1, -1)))[0]:

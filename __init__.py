@@ -25,6 +25,8 @@ from .src.split_rule import SmallerThanSplit, SingleCategorySplit, LessThanHalfO
     FixedValueSplit, get_class_by_name, FixedChainRule, TenQuantileRangeSplit, TwentyQuantileRangeSplit, \
     simplify_rules, FiveQuantileRangeSplit
 from .src import split_rule_service
+from .src.exceptions.split import HDTreeSplitException
+from .src.exceptions.base import HDTreeBaseException
 
 
 __all__ = ['HDTreeClassifier',
@@ -63,4 +65,6 @@ __all__ = ['HDTreeClassifier',
            'AbstractSplitRule',
 
            'split_rule_service',
+           'HDTreeSplitException',
+           'HDTreeBaseException'
            ]

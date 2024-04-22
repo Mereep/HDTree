@@ -697,12 +697,12 @@ class AbstractHDTree(ABC):
             :param node_name:
             :return:
             """
-            description_text = f"\lSamples:      {node.get_sample_count()}" \
-                               f"\lScore:        {round(node.get_score(), 2)}"
+            description_text = f"\\lSamples:      {node.get_sample_count()}" \
+                               f"\\lScore:        {round(node.get_score(), 2)}"
 
             rule = node.get_split_rule()
             if rule is not None:
-                description_text += f"\lTest: {str.strip(str(rule))}"
+                description_text += f"\\lTest: {str.strip(str(rule))}"
 
             if self._supports_classification():
                 labels = node.get_labels()
@@ -713,7 +713,7 @@ class AbstractHDTree(ABC):
                 most_common = labels_cnt.most_common()[0][0]
                 for item in sorted(labels_cnt.items()):
                     name, amount = item
-                    description_text += f"\l{name}: {amount}"
+                    description_text += f"\\l{name}: {amount}"
                     if most_common == name:
                         description_text += " ✓"
 
@@ -730,7 +730,7 @@ class AbstractHDTree(ABC):
             proportion = samples_in_node / samples_total
 
             dot.node(node_name,
-                     description_text + '\l ',
+                     description_text + '\\l ',
                      shape='box',
                      style="filled" if node not in node_trace else 'filled,diagonals',
                      fillcolor=f"#{hex_number}ff{hex_number}",
